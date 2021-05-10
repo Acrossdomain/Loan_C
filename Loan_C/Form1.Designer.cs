@@ -48,10 +48,13 @@
             this.lblsuccess_c = new System.Windows.Forms.TabControl();
             this.tabPage1 = new System.Windows.Forms.TabPage();
             this.panel2 = new System.Windows.Forms.Panel();
+            this.btnlogview = new System.Windows.Forms.Button();
             this.panel1 = new System.Windows.Forms.Panel();
+            this.cmbBx_loanType = new System.Windows.Forms.ComboBox();
             this.lblDisburs_mess = new System.Windows.Forms.Label();
             this.tabPage2 = new System.Windows.Forms.TabPage();
             this.panel4 = new System.Windows.Forms.Panel();
+            this.btnCollLogView = new System.Windows.Forms.Button();
             this.lblfilter_c = new System.Windows.Forms.Label();
             this.lblSuccess_cc = new System.Windows.Forms.Label();
             this.label10 = new System.Windows.Forms.Label();
@@ -77,9 +80,11 @@
             this.label2 = new System.Windows.Forms.Label();
             this.dtp_deposit = new System.Windows.Forms.DateTimePicker();
             this.panel5 = new System.Windows.Forms.Panel();
+            this.btnDepositLogview = new System.Windows.Forms.Button();
             this.lblDepTotal = new System.Windows.Forms.Label();
             this.label18 = new System.Windows.Forms.Label();
             this.dgw_deposit = new System.Windows.Forms.DataGridView();
+            this.button2 = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.dgv_LNDISBH)).BeginInit();
             this.lblsuccess_c.SuspendLayout();
             this.tabPage1.SuspendLayout();
@@ -97,7 +102,7 @@
             // 
             // btnBank
             // 
-            this.btnBank.Location = new System.Drawing.Point(241, 8);
+            this.btnBank.Location = new System.Drawing.Point(184, 8);
             this.btnBank.Name = "btnBank";
             this.btnBank.Size = new System.Drawing.Size(44, 23);
             this.btnBank.TabIndex = 0;
@@ -109,7 +114,7 @@
             // 
             this.label1.AutoSize = true;
             this.label1.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label1.Location = new System.Drawing.Point(6, 13);
+            this.label1.Location = new System.Drawing.Point(3, 13);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(55, 13);
             this.label1.TabIndex = 1;
@@ -117,16 +122,16 @@
             // 
             // txtbank
             // 
-            this.txtbank.Location = new System.Drawing.Point(68, 9);
+            this.txtbank.Location = new System.Drawing.Point(60, 9);
             this.txtbank.Name = "txtbank";
-            this.txtbank.Size = new System.Drawing.Size(176, 20);
+            this.txtbank.Size = new System.Drawing.Size(122, 20);
             this.txtbank.TabIndex = 2;
             // 
             // btnupload
             // 
-            this.btnupload.Location = new System.Drawing.Point(604, 6);
+            this.btnupload.Location = new System.Drawing.Point(581, 7);
             this.btnupload.Name = "btnupload";
-            this.btnupload.Size = new System.Drawing.Size(75, 23);
+            this.btnupload.Size = new System.Drawing.Size(64, 23);
             this.btnupload.TabIndex = 3;
             this.btnupload.Text = "Upload";
             this.btnupload.UseVisualStyleBackColor = true;
@@ -159,25 +164,28 @@
             this.dateTimePicker2.CustomFormat = "yyyy-MM-dd";
             this.dateTimePicker2.Format = System.Windows.Forms.DateTimePickerFormat.Custom;
             this.dateTimePicker2.Location = new System.Drawing.Point(412, 9);
+            this.dateTimePicker2.MinDate = new System.DateTime(2021, 4, 1, 0, 0, 0, 0);
             this.dateTimePicker2.Name = "dateTimePicker2";
             this.dateTimePicker2.Size = new System.Drawing.Size(96, 20);
             this.dateTimePicker2.TabIndex = 9;
+            this.dateTimePicker2.Value = new System.DateTime(2021, 4, 5, 0, 0, 0, 0);
             // 
             // label4
             // 
             this.label4.AutoSize = true;
             this.label4.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label4.Location = new System.Drawing.Point(291, 13);
+            this.label4.Location = new System.Drawing.Point(339, 13);
             this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(118, 13);
+            this.label4.Size = new System.Drawing.Size(71, 13);
             this.label4.TabIndex = 11;
-            this.label4.Text = "Disbursement Date:";
+            this.label4.Text = "Disbt Date:";
+            this.label4.Click += new System.EventHandler(this.label4_Click);
             // 
             // txtGo
             // 
-            this.txtGo.Location = new System.Drawing.Point(520, 6);
+            this.txtGo.Location = new System.Drawing.Point(515, 7);
             this.txtGo.Name = "txtGo";
-            this.txtGo.Size = new System.Drawing.Size(75, 23);
+            this.txtGo.Size = new System.Drawing.Size(53, 23);
             this.txtGo.TabIndex = 12;
             this.txtGo.Text = "GO";
             this.txtGo.UseVisualStyleBackColor = true;
@@ -287,6 +295,7 @@
             // panel2
             // 
             this.panel2.BackColor = System.Drawing.SystemColors.ActiveCaption;
+            this.panel2.Controls.Add(this.btnlogview);
             this.panel2.Controls.Add(this.label11);
             this.panel2.Controls.Add(this.label5);
             this.panel2.Controls.Add(this.lblValPassCount);
@@ -301,9 +310,21 @@
             this.panel2.Size = new System.Drawing.Size(1008, 35);
             this.panel2.TabIndex = 24;
             // 
+            // btnlogview
+            // 
+            this.btnlogview.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnlogview.Location = new System.Drawing.Point(913, 4);
+            this.btnlogview.Name = "btnlogview";
+            this.btnlogview.Size = new System.Drawing.Size(75, 23);
+            this.btnlogview.TabIndex = 23;
+            this.btnlogview.Text = "Log View";
+            this.btnlogview.UseVisualStyleBackColor = true;
+            this.btnlogview.Click += new System.EventHandler(this.btnlogview_Click);
+            // 
             // panel1
             // 
             this.panel1.BackColor = System.Drawing.SystemColors.ActiveCaption;
+            this.panel1.Controls.Add(this.cmbBx_loanType);
             this.panel1.Controls.Add(this.lblDisburs_mess);
             this.panel1.Controls.Add(this.btnupload);
             this.panel1.Controls.Add(this.txtGo);
@@ -317,14 +338,22 @@
             this.panel1.Size = new System.Drawing.Size(1008, 35);
             this.panel1.TabIndex = 23;
             // 
+            // cmbBx_loanType
+            // 
+            this.cmbBx_loanType.FormattingEnabled = true;
+            this.cmbBx_loanType.Location = new System.Drawing.Point(234, 9);
+            this.cmbBx_loanType.Name = "cmbBx_loanType";
+            this.cmbBx_loanType.Size = new System.Drawing.Size(99, 21);
+            this.cmbBx_loanType.TabIndex = 14;
+            // 
             // lblDisburs_mess
             // 
             this.lblDisburs_mess.AutoSize = true;
-            this.lblDisburs_mess.Font = new System.Drawing.Font("Microsoft Sans Serif", 9.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)), true);
+            this.lblDisburs_mess.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)), true);
             this.lblDisburs_mess.ForeColor = System.Drawing.Color.DarkOrange;
-            this.lblDisburs_mess.Location = new System.Drawing.Point(701, 11);
+            this.lblDisburs_mess.Location = new System.Drawing.Point(653, 11);
             this.lblDisburs_mess.Name = "lblDisburs_mess";
-            this.lblDisburs_mess.Size = new System.Drawing.Size(0, 16);
+            this.lblDisburs_mess.Size = new System.Drawing.Size(0, 15);
             this.lblDisburs_mess.TabIndex = 13;
             // 
             // tabPage2
@@ -343,6 +372,7 @@
             // panel4
             // 
             this.panel4.BackColor = System.Drawing.SystemColors.ActiveCaption;
+            this.panel4.Controls.Add(this.btnCollLogView);
             this.panel4.Controls.Add(this.lblfilter_c);
             this.panel4.Controls.Add(this.lblSuccess_cc);
             this.panel4.Controls.Add(this.label10);
@@ -353,6 +383,17 @@
             this.panel4.Name = "panel4";
             this.panel4.Size = new System.Drawing.Size(1008, 35);
             this.panel4.TabIndex = 25;
+            // 
+            // btnCollLogView
+            // 
+            this.btnCollLogView.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnCollLogView.Location = new System.Drawing.Point(919, 7);
+            this.btnCollLogView.Name = "btnCollLogView";
+            this.btnCollLogView.Size = new System.Drawing.Size(75, 23);
+            this.btnCollLogView.TabIndex = 30;
+            this.btnCollLogView.Text = "Log View";
+            this.btnCollLogView.UseVisualStyleBackColor = true;
+            this.btnCollLogView.Click += new System.EventHandler(this.btnCollLogView_Click);
             // 
             // lblfilter_c
             // 
@@ -414,6 +455,7 @@
             // panel3
             // 
             this.panel3.BackColor = System.Drawing.SystemColors.ActiveCaption;
+            this.panel3.Controls.Add(this.button2);
             this.panel3.Controls.Add(this.cmb_col_to);
             this.panel3.Controls.Add(this.label14);
             this.panel3.Controls.Add(this.label12);
@@ -431,16 +473,16 @@
             // cmb_col_to
             // 
             this.cmb_col_to.FormattingEnabled = true;
-            this.cmb_col_to.Location = new System.Drawing.Point(463, 4);
+            this.cmb_col_to.Location = new System.Drawing.Point(429, 4);
             this.cmb_col_to.Name = "cmb_col_to";
-            this.cmb_col_to.Size = new System.Drawing.Size(104, 21);
+            this.cmb_col_to.Size = new System.Drawing.Size(72, 21);
             this.cmb_col_to.TabIndex = 30;
             // 
             // label14
             // 
             this.label14.AutoSize = true;
             this.label14.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label14.Location = new System.Drawing.Point(435, 9);
+            this.label14.Location = new System.Drawing.Point(407, 9);
             this.label14.Name = "label14";
             this.label14.Size = new System.Drawing.Size(22, 13);
             this.label14.TabIndex = 29;
@@ -450,7 +492,7 @@
             // 
             this.label12.AutoSize = true;
             this.label12.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label12.Location = new System.Drawing.Point(267, 10);
+            this.label12.Location = new System.Drawing.Point(247, 10);
             this.label12.Name = "label12";
             this.label12.Size = new System.Drawing.Size(82, 13);
             this.label12.TabIndex = 28;
@@ -459,16 +501,16 @@
             // cmb_col_from
             // 
             this.cmb_col_from.FormattingEnabled = true;
-            this.cmb_col_from.Location = new System.Drawing.Point(349, 4);
+            this.cmb_col_from.Location = new System.Drawing.Point(329, 4);
             this.cmb_col_from.Name = "cmb_col_from";
-            this.cmb_col_from.Size = new System.Drawing.Size(84, 21);
+            this.cmb_col_from.Size = new System.Drawing.Size(74, 21);
             this.cmb_col_from.TabIndex = 26;
             // 
             // button1
             // 
-            this.button1.Location = new System.Drawing.Point(570, 4);
+            this.button1.Location = new System.Drawing.Point(507, 4);
             this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(75, 23);
+            this.button1.Size = new System.Drawing.Size(66, 23);
             this.button1.TabIndex = 19;
             this.button1.Text = "Upload";
             this.button1.UseVisualStyleBackColor = true;
@@ -478,7 +520,7 @@
             // 
             this.btnGoC.Location = new System.Drawing.Point(180, 5);
             this.btnGoC.Name = "btnGoC";
-            this.btnGoC.Size = new System.Drawing.Size(83, 23);
+            this.btnGoC.Size = new System.Drawing.Size(64, 23);
             this.btnGoC.TabIndex = 17;
             this.btnGoC.Text = "GO";
             this.btnGoC.UseVisualStyleBackColor = true;
@@ -603,12 +645,24 @@
             // panel5
             // 
             this.panel5.BackColor = System.Drawing.SystemColors.ActiveCaption;
+            this.panel5.Controls.Add(this.btnDepositLogview);
             this.panel5.Controls.Add(this.lblDepTotal);
             this.panel5.Controls.Add(this.label18);
             this.panel5.Location = new System.Drawing.Point(1, 426);
             this.panel5.Name = "panel5";
             this.panel5.Size = new System.Drawing.Size(1008, 35);
             this.panel5.TabIndex = 26;
+            // 
+            // btnDepositLogview
+            // 
+            this.btnDepositLogview.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.btnDepositLogview.Location = new System.Drawing.Point(914, 7);
+            this.btnDepositLogview.Name = "btnDepositLogview";
+            this.btnDepositLogview.Size = new System.Drawing.Size(75, 23);
+            this.btnDepositLogview.TabIndex = 32;
+            this.btnDepositLogview.Text = "Log View";
+            this.btnDepositLogview.UseVisualStyleBackColor = true;
+            this.btnDepositLogview.Click += new System.EventHandler(this.btnDepositLogview_Click);
             // 
             // lblDepTotal
             // 
@@ -639,6 +693,16 @@
             this.dgw_deposit.ReadOnly = true;
             this.dgw_deposit.Size = new System.Drawing.Size(1008, 384);
             this.dgw_deposit.TabIndex = 20;
+            // 
+            // button2
+            // 
+            this.button2.Location = new System.Drawing.Point(576, 4);
+            this.button2.Name = "button2";
+            this.button2.Size = new System.Drawing.Size(64, 23);
+            this.button2.TabIndex = 31;
+            this.button2.Text = "Failed";
+            this.button2.UseVisualStyleBackColor = true;
+            this.button2.Click += new System.EventHandler(this.button2_Click);
             // 
             // Form1
             // 
@@ -726,6 +790,11 @@
         private System.Windows.Forms.Label label14;
         private System.Windows.Forms.Label label12;
         private System.Windows.Forms.ComboBox cmb_col_to;
+        private System.Windows.Forms.Button btnlogview;
+        private System.Windows.Forms.Button btnCollLogView;
+        private System.Windows.Forms.Button btnDepositLogview;
+        private System.Windows.Forms.ComboBox cmbBx_loanType;
+        private System.Windows.Forms.Button button2;
     }
 }
 

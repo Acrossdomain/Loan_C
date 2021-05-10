@@ -11,9 +11,9 @@ namespace Loan_C
         public object SourceType { get; set; }
         //public object EntryType { get; set; }
         public object Description { get; set; }
-       // public object TaxGroup { get; set; }
-       // public object TaxBaseAmount1 { get; set; }
-       // public object TaxItemClass1 { get; set; }
-         public List<ent_GLDetail> JournalDetails;
+        public object PostingDate { get; set; }
+         public object DocumentDate { get; set; }
+        // public object TaxItemClass1 { get; set; }
+        public List<ent_GLDetail> JournalDetails;
     }
 }

@@ -59,14 +59,25 @@ namespace Loan_C
         public Dictionary<string, string> oldacct;
         public Dictionary<string, string> errList;       
         string connectionstring;
-
+        string logfilename;
+        ListBox mstrlist;
+        String Disb_LogFile;
+        String Disb_LogFile_failed;
+        String Coll_LogFile;
+        String Coll_LogFile_failed;
+        String ColDiposit_LogFile;
+        String ColDiposit_LogFile_failed;
         public Form1()
         {
             InitializeComponent();
             ojbLog = new LogGenerator();
             CredentialsXml();
             connectionstring = "Data Source=" + SERVERNAME + "; Initial Catalog=" + SAGEDB + "; User ID=" + SAA + "; Password=" + SAPSS + ";";
-
+            DataSet dataSet = new DataSet();
+            dataSet.ReadXml(@"LoanTypeList.xml");
+            cmbBx_loanType.DisplayMember = "LoanType";
+            cmbBx_loanType.ValueMember = "LoanType";
+            cmbBx_loanType.DataSource = dataSet.Tables[0];
         }        
 
         #region Disbursment --------------------------------------------
@@ -104,13 +115,24 @@ namespace Loan_C
         }
         private void txtGo_Click(object sender, EventArgs e)
         {
+
+            DisSageAccId = "";
+            lblTotalrowcount.Text = "";
+            lblslotcount.Text = "";
+            lblValFailCount.Text = "";
+            lblValPassCount.Text = "";
             lblDisburs_mess.Text = "Please wait.......";
+            getList();
+            lblDisburs_mess.Text = "";
+        }
+        public void getList()
+        {
             DataTable tbGRD;
             System.Data.SqlClient.SqlConnection conn;
             System.Data.SqlClient.SqlCommand cmd;
             conn = new System.Data.SqlClient.SqlConnection(connectionstring);
             conn.Open();
-            string Querystring = "SELECT * FROM " + THSERVERMSTR + " h where Convert(date,h.disbdate,100) between '" + dateTimePicker2.Text + "' AND '" + dateTimePicker2.Text + "'";
+            string Querystring = "SELECT * FROM " + THSERVERMSTR + " h where h.loantype='"+cmbBx_loanType.Text+"' and h.sage_gL_BATCHno is null and h.sage_gl_bank_entryno is null  and  Convert(date,h.disbdate,100) between '" + dateTimePicker2.Text + "' AND '" + dateTimePicker2.Text + "'";
             cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
             cmd.CommandTimeout = 180;
             cmd.CommandType = CommandType.Text;
@@ -136,23 +158,33 @@ namespace Loan_C
                         dgv_LNDISBH.DataSource = tbGRD;
                         dgv_LNDISBH.AutoGenerateColumns = false;
                     }
-                    else { MessageBox.Show("Data not found!"); }
+                    else {
+                        dgv_LNDISBH.DataSource = tbGRD;
+                        MessageBox.Show("Data not found!"); }
                 }
             }
-            lblDisburs_mess.Text = "";
         }
         private void btnupload_Click(object sender, EventArgs e)
         {
-            lblDisburs_mess.Text = "Please wait, checking validations.......";
-            ojbLog.WriteLog("---------------Start Date Time " + System.DateTime.Now.ToString() + "---------------");
+            DisSageAccId = "";
+            logfilename = System.DateTime.Now.ToString();
+            logfilename = logfilename.Replace(" ", "-");
+            logfilename = logfilename.Replace(":", "");
+            logfilename = logfilename.Replace("/", "-");
+           // Disb_LogFile = @"Logs/Log- " + logfilename + ".txt";
+            //Disb_LogFile = @"Logs/Log- " + logfilename + ".txt";
+            Disb_LogFile_failed = "DIS-FAILED-" + logfilename;
+            Disb_LogFile = @"Logs/Log- " + Disb_LogFile_failed + ".txt";
+            ojbLog.WriteLog(logfilename,"---------------Start Date Time " + System.DateTime.Now.ToString() + "---------------");
             btnupload.Enabled = false;
             GLJAccountController();
             btnupload.Enabled = true;
-            ojbLog.WriteLog("---------------End Date Time " + System.DateTime.Now.ToString() + "---------------");
+            ojbLog.WriteLog(logfilename,"---------------End Date Time " + System.DateTime.Now.ToString() + "---------------");
             lblDisburs_mess.Text = "";
         }
         public void GLJAccountController()
         {
+            lblDisburs_mess.Text = "Please wait, checking validations.......";
             int strcount = 0;
             int FailCount = 0;
 
@@ -170,6 +202,8 @@ namespace Loan_C
                 Double igstamt;
                 Double cgstamt;
                 Double sgstamt;
+                string strbc_id;
+                string strbc_name;
 
                 string taxgroupcode;
                 string taxliabilityaccount = "";
@@ -191,7 +225,7 @@ namespace Loan_C
                 System.Data.SqlClient.SqlCommand cmd;
                 conn = new System.Data.SqlClient.SqlConnection(connectionstring);
                 conn.Open();
-                string Querystring = "SELECT  *,ROW_NUMBER() OVER (ORDER BY id) as RN FROM " + THSERVERMSTR + " h where Convert(date,h.disbdate,100) between '" + dateTimePicker2.Text + "' AND '" + dateTimePicker2.Text + "'";
+                string Querystring = "SELECT  *,ROW_NUMBER() OVER (ORDER BY id) as RN FROM " + THSERVERMSTR + " h where h.loantype='" + cmbBx_loanType.Text + "' and h.sage_gL_BATCHno is null and h.sage_gl_bank_entryno is null  and Convert(date,h.disbdate,100) between '" + dateTimePicker2.Text + "' AND '" + dateTimePicker2.Text + "'";
                 //  string Querystring = "SELECT *,ROW_NUMBER() OVER (ORDER BY id) as RN FROM " + THSERVERMSTR + " h where loanid=740597";
 
                 cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
@@ -206,8 +240,8 @@ namespace Loan_C
                     using (lndisbrh_tbl = new DataTable())
                     {
                         sda.Fill(lndisbrh_tbl);
-                        //ojbLog.WriteLog("Total header row count = " + lndisbrh_tbl.Rows.Count);
-                        ojbLog.WriteLog("Total header row count = " + lndisbrh_tbl.Rows.Count);
+                        //ojbLog.WriteLog(logfilename,"Total header row count = " + lndisbrh_tbl.Rows.Count);
+                        ojbLog.WriteLog(logfilename,"Total header row count = " + lndisbrh_tbl.Rows.Count);
                         //if(i>1)
                         //{
                         //    TOCount =FromCount;
@@ -221,7 +255,6 @@ namespace Loan_C
                             lstHeader = new List<ent_GLHeader>();
                             foreach (DataRow row in lndisbrh_tbl.Rows)
                             {
-                                
                                 valid_return = false;
                                 header = new ent_GLHeader();
                                 lstDet = new List<ent_GLDetail>();
@@ -236,371 +269,346 @@ namespace Loan_C
                                 Def_LNDes = Convert.ToDouble(row["financeAmt"].ToString().Trim()) - Convert.ToDouble(row["net_amount"].ToString().Trim());
                                 branchid = row["branchid"].ToString().Trim();
                                 placeSupcode = row["stateid"].ToString().Trim();
-                                gstStateCode = "07"; //row["placeof_supply"].ToString().Trim();
-                                                     // borrowerName = "borrower_name"; //row["borrower_name"].ToString().Trim();
+                                if (placeSupcode.Length == 1)
+                                    placeSupcode = "0"+placeSupcode;
+                                gstStateCode = "07";
+                                strbc_id = row["bc_id"].ToString().Trim();
+                                strbc_name = row["bc_name"].ToString().Trim();
 
                                 NetAmount = row["net_amount"].ToString().Trim();
+                              
                                 //'To check if igst or cgst is applicable
                                 if (gstStateCode == placeSupcode)
                                     strS_var = "SAME";
                                 else
                                     strS_var = "DEFF";
-                                lblDisburs_mess.Text = "Please wait, In proccess Row Number= " + row["RN"].ToString().Trim()+" LoanId-" +strLoanID ;
-                                ojbLog.WriteLog("Row Number= " + row["RN"].ToString().Trim());
-                                ojbLog.WriteLog("Calling function to check if loanid already dusbursed....Loan_Id = " + strLoanID);
-                                // ojbLog.WriteLog("Calling function to check if loanid already dusbursed....Loan_Id=" + strLoanID);
-                                if (CHK_LOAN_Disb(strLoanID) == true)
-                                {
-                                    ojbLog.WriteLog("Calling function to check if loanid exist in loan master....");
-                                    //check existing loanid in loan master
-                                    if (CHK_LNID_LNLOAN(strLoanID) == true)
+
+                                lblDisburs_mess.Text = "Please wait, In proccess Row Number= " + row["RN"].ToString().Trim() + " LoanId-" + strLoanID;
+                                ojbLog.WriteLog(logfilename,"Row Number= " + row["RN"].ToString().Trim());
+                                //if (strbc_id != "" && strbc_id != null && strbc_id != "NULL")
+                                //{
+                                //    ojbLog.WriteLog(logfilename,"BC_ID not null inserting Loan_Id = " + strLoanID +"   BC_id="+strbc_id+"-"+strbc_name);
+                                //    Insert_LoanIdMStr_BC(strLoanID,strbc_id,strbc_name);
+                                //    ojbLog.WriteLog(logfilename,"BC_ID not null Inserted Loan_Id");
+                                //}
+                                //else
+                                //{
+                                    ojbLog.WriteLog(logfilename,"Calling function to check if loanid already dusbursed....Loan_Id = " + strLoanID);
+                                    // ojbLog.WriteLog(logfilename,"Calling function to check if loanid already dusbursed....Loan_Id=" + strLoanID);
+                                    if (CHK_LOAN_Disb(strLoanID) == true)
                                     {
-                                        // check existing dis in sage
-                                        ojbLog.WriteLog("Calling function to Check net amount of disbursement....");
-                                        //'Check net amount of disbursement
-                                        if (checkamtvalidation(hdSeqNo, Def_LNDes, strS_var) == true)
+                                        ojbLog.WriteLog(logfilename,"Calling function to check if loanid exist in loan master....");
+                                        //check existing loanid in loan master
+                                        if (CHK_LNID_LNLOAN(strLoanID,0,"") == true)
                                         {
-                                            ojbLog.WriteLog("Calling function to Check and insert loan account in sage database....");
-                                            //'Check and insert loan account
-                                            if (getaccountid_status(hdSeqNo) == true)
+                                            // check existing dis in sage
+                                            ojbLog.WriteLog(logfilename,"Calling function to Check net amount of disbursement....");
+                                            //'Check net amount of disbursement
+                                            if (checkamtvalidation(hdSeqNo, Def_LNDes, strS_var) == true)
                                             {
-                                                ojbLog.WriteLog("Calling function to Validate loan disbursement details before GL entry....");
-                                                //'Validate loan disbursement details before GL entry
-                                                if (loandisbdetails(hdSeqNo, placeSupcode, branchid) == true)
+                                                ojbLog.WriteLog(logfilename,"Calling function to Check and insert loan account in sage database....");
+                                                //'Check and insert loan account
+                                                if (getaccountid_status(hdSeqNo) == true)
                                                 {
-                                                    ojbLog.WriteLog("Loan disbusment detail GL Account validation successful....");
-                                                    valid_return = true;
-                                                    ss1 = ss1 + 1;
-                                                    lblValPassCount.Text = ss1.ToString();
+                                                    ojbLog.WriteLog(logfilename,"Calling function to Validate loan disbursement details before GL entry....");
+                                                    //'Validate loan disbursement details before GL entry
+                                                    if (loandisbdetails(hdSeqNo, placeSupcode, branchid) == true)
+                                                    {
+                                                        ojbLog.WriteLog(logfilename,"Loan disbusment detail GL Account validation successful....");
+                                                        valid_return = true;
+                                                        ss1 = ss1 + 1;
+                                                        lblValPassCount.Text = ss1.ToString();
                                                     //lblValPassCount.Text = strcount.ToString();
                                                     // Checking detail line account successful...."
                                                     //if (loandisdetails_oldloan(hdSeqNo) == true) ///Validate old loan account exist or not
                                                     //{
-                                                    //    ojbLog.WriteLog("Checking detail line old loan account successful....");
+                                                    //    ojbLog.WriteLog(logfilename,"Checking detail line old loan account successful....");
                                                     //    //GLDesmtDetail.ListBox1.AddItem " Checking detail line old loan account successful...."
                                                     //    //GLBatchEntry(hdSeqNo);
                                                     //    strreturn = true;
                                                     //}
-                                                    //else { ojbLog.WriteLog("loandisdetails_oldloan Validation Failed....");  }
+                                                    //else { ojbLog.WriteLog(logfilename,"loandisdetails_oldloan Validation Failed...."+strLoanID);  }
                                                 }
-                                                else { ojbLog.WriteLog("Loan disbusment detail GL Account validation Failed...."); }
+                                                else { ojbLog.WriteLog(Disb_LogFile_failed, "Loan disbusment detail GL Account validation Failed...."+ strLoanID); }
+                                                }
+                                                else { ojbLog.WriteLog(Disb_LogFile_failed, "getaccountid_status Validation Failed...."+ strLoanID); }
                                             }
-                                            else { ojbLog.WriteLog("getaccountid_status Validation Failed...."); }
-                                        }
-                                        else { ojbLog.WriteLog("Amount Validation Failed...."); }
-                                    }
-                                    else
-                                    { ojbLog.WriteLog("Some thing error for inserting Loan Master...."); }
-                                }
-                                else
-                                {
-                                    disburscount = disburscount + 1;
-                                    lblslotcount.Text = disburscount.ToString();
-                                }
-                                //}
-
-                                //if (batchprocesserror  == false)
-                                //{
-                                //oldacct = null;
-
-
-                                //var objerrList = (IDictionary<string, object>)person;
-                                // foreach (DataRow row1 in lndisbrh_tbl.Rows)
-                                //{
-                                // hdSeqNo = row1["loanid"].ToString();
-                                if (valid_return == true)
-                                {
-                                    try
-                                    {
-                                        strcount = strcount + 1;
-                                        ojbLog.WriteLog("Going to insert GLBatch Entry..........");
-                                        // System.Data.SqlClient.SqlConnection conn;
-                                        System.Data.SqlClient.SqlCommand cmd1;
-                                        conn = new System.Data.SqlClient.SqlConnection(connectionstring);
-                                        conn.Open();
-
-                                        // Qry to check it is tax type entry or not
-                                        string Querystring1 = " Select (sum(ISNULL(AMOUNT, 0)) * -1),SUM(CONVERT(DECIMAL, igst_amt)),SUM(CONVERT(DECIMAL, cgst_amt)),SUM(CONVERT(DECIMAL, sgst_amt))" +
-                                           "  from " + THSERVERDETS + " where LOANID = " + hdSeqNo + "  and(ISNULL(igst_amt, 0) <> 0 or ISNULL(cgst_amt, 0) <> 0)";
-                                        cmd1 = new System.Data.SqlClient.SqlCommand(Querystring1, conn);
-                                        cmd1.CommandTimeout = 180;
-                                        cmd1.CommandType = CommandType.Text;
-                                        cmd1.ExecuteNonQuery();
-                                        using (System.Data.SqlClient.SqlDataAdapter glsda = new System.Data.SqlClient.SqlDataAdapter())
-                                        {
-                                            cmd1.Connection = conn;
-                                            glsda.SelectCommand = cmd1;
-                                            using (dtgjbatch = new DataTable())
-                                            {
-                                                glsda.Fill(dtgjbatch);
-                                                if (dtgjbatch.Rows.Count > 0)  // if it is tax tupe entry count will be more than 0
-                                                {
-                                                    taxType_entry = true;
-                                                    taxbase = Convert.ToDouble(dtgjbatch.Rows[0][0]);
-                                                    igstamt = Convert.ToDouble(dtgjbatch.Rows[0][1]);
-                                                    cgstamt = Convert.ToDouble(dtgjbatch.Rows[0][2]);
-                                                    sgstamt = Convert.ToDouble(dtgjbatch.Rows[0][3]);
-                                                }
-                                                else
-                                                {
-                                                    taxType_entry = false;
-                                                    taxbase = 0;
-                                                    igstamt = 0;
-                                                    cgstamt = 0;
-                                                    sgstamt = 0;
-                                                }
-                                                // to determine igst or cgst depending on the state codes and deriving tax group
-                                                if (strS_var == "DEFF")
-                                                    taxgroupcode = gstStateCode + "IGN";
-                                                else
-                                                    taxgroupcode = gstStateCode + "CGN";
-
-                                                DataSet tblibr;
-                                                //string Querystring1 = " Select LIABILITY from [" + dbnameSage + "].[dbo].TXAUTH where AUTHORITY='" + taxgroupcode + "';" +
-                                                //    "select RTRIM(cast(a.detail_line as char)), RTRIM(cast(a.loan_id as CHAR)), rtrim(b.borrower_name), RTRIM(cast(a.trans_type as char)), " +
-                                                //    " case when SUBSTRING(c.VDESC,7,3)= 'ASB' then SUBSTRING(c.VDESC,1,5)+'-' + b.placeof_supply + '-' + b.branch_id " +
-                                                //    " when SUBSTRING(c.VDESC,7,3)= 'ASN' then SUBSTRING(c.VDESC,1,5)+'-' + '00' end, " +
-                                                //    " a.trans_desc, a.oldloan_accountid, a.trans_amt , a.gst_rate, ISNULL(a.igst_amt, 0), ISNULL(a.cgst_amt, 0), ISNULL(a.sgst_amt, 0), " +
-                                                //    " RTRIM(b.sage_acctid) from LNDSDB.dbo.disbursement_details a left join LNDSDB.dbo.disbursement_master b on b.loanid = a.hdseq_no " +
-                                                //    //" left join [ctldat].dbo.CSOPTFD c on CAST(a.trans_type as char)= RTRIM(c.value) and c.OPTFIELD = 'LNACCTMAPIN' " +
-                                                //    " where a.amount <> 0 and a.loanid ='" + hdSeqNo + "' ";
-                                                string Querystring11 = " Select LIABILITY from [" + SAGEDB + "].[dbo].TXAUTH where AUTHORITY='" + taxgroupcode + "' ; " +   // deriving tax liability account
-                                                                " select a.id, a.loanid, '" + borrowerName + "' as borrowerName, " +
-                                                                " case when RTRIM(a.type)= 'Processing Fee' then RTRIM(a.sage_id)+'-' + Cast(b.stateid as varchar) + '-' + Cast(right('0'+left(b.branchid,4),4) as varchar)  " +
-                                                                " when RTRIM(a.type)= 'Verification' then RTRIM(a.sage_id)+'-00'  when RTRIM(a.type)= 'NIP' then RTRIM(a.sage_id)+Cast(b.stateid as varchar) + '-' + Cast(right('0'+left(b.branchid,4),4) as varchar)  " +
-                                                                " when RTRIM(a.type)= 'Risk Fund' then RTRIM(a.sage_id)+'-00'  when RTRIM(a.type)= 'Hospi' then  RTRIM(a.sage_id)+'-00' else '0'  end,  " +
-                                                                " a.[type], a.oldloanid, a.amount , a.gst_rate, ISNULL(a.igst_amt, 0), ISNULL(a.cgst_amt, 0), ISNULL(a.sgst_amt, 0),  " +
-                                                                " '" + DisSageAccId + "' sage_acctid from " + THSERVERDETS + " a  " +
-                                                                " left join " + THSERVERMSTR + " b on b.loanid = a.loanid  where  a.amount <> 0 and a.loanid = '" + hdSeqNo + "'"; // selecting detail line items for journal entry
-
-                                                cmd1 = new System.Data.SqlClient.SqlCommand(Querystring11, conn);
-                                                cmd1.CommandTimeout = 180;
-                                                cmd1.CommandType = CommandType.Text;
-                                                cmd1.ExecuteNonQuery();
-                                                using (System.Data.SqlClient.SqlDataAdapter glsds = new System.Data.SqlClient.SqlDataAdapter())
-                                                {
-                                                    using (tblibr = new DataSet())
-                                                    {
-                                                        glsds.SelectCommand = cmd1;
-                                                        glsds.Fill(tblibr);
-                                                        if (tblibr.Tables[0].Rows.Count > 0)
-                                                        {
-                                                            taxliabilityaccount = tblibr.Tables[0].Rows[0][0].ToString().Trim();
-                                                        }
-                                                        else
-                                                        {
-                                                            ojbLog.WriteLog("Tax liability GL account not found  - aborting");
-                                                        }
-                                                    }
-                                                    dloanid = tblibr.Tables[1].Rows[0][1].ToString();
-                                                    sageloanacct = tblibr.Tables[1].Rows[0][11].ToString().Trim();
-                                                }
-                                                // creating header and detail line 
-                                                if (taxType_entry == true)
-                                                {
-                                                    //Entering header details
-                                                    header.SourceType = "LD";     // Header source type LD for loan disbursement
-                                                                                  //header.TaxBaseAmount1 = taxbase;
-                                                                                  //header.TaxGroup = taxgroupcode;
-                                                                                  //header.TaxItemClass1 = "5";
-                                                                                  //header.EntryType = "1";
-                                                    header.Description = sageloanacct;
-                                                    header.JournalDetails = lstDet;
-                                                    lstHeader.Add(header);
-                                                    // ojbLog.WriteLog(header.ToString());
-                                                    // Entering Journal details for taxes 
-                                                    detail = new ent_GLDetail();
-                                                    detail.SourceType = "TI";   // Detail source type T1 for crediting Tax liability IGST account
-                                                    detail.Reference = hdSeqNo;
-                                                    // detail.TaxAuthority = "07IGN";
-                                                    detail.Description = sageloanacct.Trim();
-                                                    detail.AccountNumber = taxliabilityaccount.Trim();
-                                                    detail.Amount = igstamt;
-                                                    lstDet.Add(detail);
-
-                                                    detail = new ent_GLDetail();
-                                                    detail.SourceType = "LC";   // Detail source type LC for debiting loan account for gst
-                                                    detail.Reference = hdSeqNo.Trim();
-                                                    detail.AccountNumber = sageloanacct.Trim();
-                                                    detail.Description = "GST";
-                                                    detail.Amount = igstamt * -1;
-                                                    lstDet.Add(detail);
-
-                                                    // ojbLog.WriteLog(detail.ToString());
-                                                }
-                                                foreach (DataRow rowR in tblibr.Tables[1].Rows)
-                                                {
-                                                    //'Creating entries for detail line which are not adjustment of old loan account
-                                                    // ' Checking & processing for charges which are subject to gst
-                                                    if (rowR[3].ToString() != "0" && rowR[6].ToString() != "0" && rowR[7].ToString() != "0")
-                                                    {
-                                                        detail = new ent_GLDetail();
-                                                        detail.AccountNumber = rowR[3].ToString().Trim();
-                                                        detail.Amount = rowR[6];
-                                                        detail.Description = rowR[1].ToString().Trim() + "-" + rowR[2].ToString().Trim();
-                                                        detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
-                                                        detail.SourceType = "X5";                                    //Taxable charge item -  5 means tax class 5 ie 18%
-                                                                                                                     //detail.TaxAuthority = "07IGN";
-                                                        lstDet.Add(detail);
-                                                        ojbLog.WriteLog("X5=>" + rowR[11].ToString().Trim());
-                                                        detail = new ent_GLDetail();
-                                                        detail.AccountNumber = rowR[11].ToString().Trim();
-                                                        detail.Amount = (Convert.ToDouble(rowR[6]) * -1);
-                                                        detail.Description = rowR[3].ToString().Trim() + "-" + rowR[4].ToString().Trim();
-                                                        detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
-                                                        detail.SourceType = "LC";  // Detail source type LC for debiting loan account for gst
-                                                                                   // detail.TaxAuthority = "07IGN";
-                                                        lstDet.Add(detail);
-                                                    }
-                                                    //'Checking & processing for charges which are NOT subject to gst
-                                                    if (rowR[3].ToString() != "0" && rowR[6].ToString() != "0" && rowR[7].ToString() == "0")
-                                                    {
-                                                        detail = new ent_GLDetail();
-                                                        detail.AccountNumber = rowR[3].ToString().Trim();
-                                                        detail.Amount = rowR[6];
-                                                        detail.Description = rowR[1].ToString().Trim() + "-" + rowR[2].ToString().Trim();
-                                                        detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
-                                                        detail.SourceType = "X1";                 //Non taxable charge  items
-                                                                                                  //detail.TaxAuthority = "07IGN";
-                                                        lstDet.Add(detail);
-                                                        ojbLog.WriteLog("X1=>" + rowR[11].ToString().Trim());
-                                                        detail = new ent_GLDetail();
-                                                        detail.AccountNumber = rowR[11].ToString().Trim();
-                                                        detail.Amount = (Convert.ToDouble(rowR[6]) * -1);
-                                                        detail.Description = rowR[3].ToString().Trim() + "-" + rowR[4].ToString().Trim();
-                                                        detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
-                                                        detail.SourceType = "LC";
-                                                        //detail.TaxAuthority = "07IGN";
-                                                        lstDet.Add(detail);
-                                                    }
-
-                                                    //'Checking & processing for old loan adjustment
-                                                    //'For crediting old loan account - credit amount
-                                                    if (rowR[3].ToString() == "0" && rowR[6].ToString() != "0" && rowR[5].ToString() != "0")
-                                                    {
-                                                        detail = new ent_GLDetail();
-                                                        detail.AccountNumber = oldacct[rowR[0].ToString().Trim()];
-                                                        detail.Amount = rowR[6];
-                                                        detail.Description = rowR[1].ToString().Trim() + "-" + rowR[2].ToString().Trim();
-                                                        detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
-                                                        detail.SourceType = "OL";
-                                                        //detail.TaxAuthority = "07IGN";
-                                                        lstDet.Add(detail);
-                                                        ojbLog.WriteLog("ol =>" + rowR[11].ToString().Trim());
-                                                        detail = new ent_GLDetail();
-                                                        detail.AccountNumber = rowR[11].ToString().Trim();
-                                                        detail.Amount = (Convert.ToDouble(rowR[6]) * -1);
-                                                        detail.Description = oldacct[rowR[0].ToString().Trim()];
-                                                        detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
-                                                        detail.SourceType = "LO";
-                                                        // detail.TaxAuthority = "07IGN";
-                                                        lstDet.Add(detail);
-                                                    }
-                                                    ojbLog.WriteLog("Json Created for GL Detail line item.." + rowR[3].ToString().Trim());
-                                                }
-                                            }
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        ojbLog.WriteLog("GLBatchEntry Inseting fail........." + ex.Message.ToString());
-                                    }
-                                    Jbatch.UpdateOperation = "Unspecified";
-                                    Jbatch.Description = "LD";
-                                    Jbatch.JournalHeaders = lstHeader;
-                                    var payloadString7 = JsonConvert.SerializeObject(Jbatch);
-                                    Loan_Dis_List = strLoanID + "," + Loan_Dis_List;
-                                    string ss = "'00" + strLoanID + "'";
-                                    Loan_Dis_List00 = ss + "," + Loan_Dis_List00;
-                                }
-                                else {
-                                    FailCount = FailCount + 1;
-                                    lblValFailCount.Text = FailCount.ToString(); }
-                                ////if (loandisdetails_oldloan(hdSeqNo) == true) ///Validate old loan account exist or not
-                                ////{
-                                // GLBatchEntry(hdSeqNo);
-                                //    glentryno = glentryno + 1;
-                                //// }
-
-                                //}
-                                ojbLog.WriteLog("                                                              ");
-                                ojbLog.WriteLog("--------------------------------------------------------------------------------------------");
-                                ojbLog.WriteLog("                                                             ");
-                            }
-
-                            if (strcount > 0)
-                            {
-                                var payloadString = JsonConvert.SerializeObject(Jbatch);
-                                // MessageBox.Show(payloadString);
-
-                                //var saveFile = new SaveFileDialog();
-                                //saveFile.Filter = "Text (*.txt)|*.txt";
-                                //if (saveFile.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                                //{
-                                //    System.IO.StreamWriter SaveFile = new System.IO.StreamWriter(saveFile.FileName);
-                                //    // for (int i = 0; i < listBox1.Items.Count; i++)
-                                //    SaveFile.WriteLine(payloadString.ToString());
-                                //    SaveFile.ToString();
-                                //    SaveFile.Close();
-                                //}
-
-                                lblDisburs_mess.Text = "Please wait for Batch Entry API Response......";
-                                ojbLog.WriteLog(payloadString.ToString());
-                                ojbLog.WriteLog("JSON creater for GLBatchEntry  going for inserting ..");
-
-                                dynamic newCustomer = POSTData(Jbatch, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/GL/GLJournalBatches");
-                                dynamic deserialized = null;
-                                try
-                                {
-                                    if (newCustomer != "ERROR")
-                                    {
-                                        deserialized = JsonConvert.DeserializeObject(newCustomer.ToString());
-                                        var rESPONSE = deserialized["JournalHeaders"];
-                                        dynamic des = JsonConvert.DeserializeObject(rESPONSE.ToString());
-                                        str_batchno = des[0].BatchNumber.ToString();
-                                        string EntryNumber = des[0].EntryNumber.ToString();
-                                        ojbLog.WriteLog("GL Entry creation successful....GLBatchNumbr=" + str_batchno);
-                                        //rntGLBatchEntry = true;
-                                        //ojbLog.WriteLog("GLBatchEntry Updating......");
-                                        //if(UpdateBatchEntryNo(str_batchno, hdSeqNo)==true)
-                                        //ojbLog.WriteLog("GLBatchEntry No updated in disbursement header...GLBatchNumbr=" + str_batchno);
-                                        // else
-                                        // ojbLog.WriteLog("GLBatchEntry No updating failed in disbursement header...GLBatchNumbr=" + str_batchno);
-                                        Loan_Dis_List = Loan_Dis_List.Remove(Loan_Dis_List.Length - 1, 1);
-                                        Loan_Dis_List00 = Loan_Dis_List00.Remove(Loan_Dis_List00.Length - 1, 1);
-                                        lblDisburs_mess.Text = "Please wait for Bank API Response......";
-                                        Boolean bk = BankEntry(Loan_Dis_List, str_batchno);
-
-                                        if (bk == true)
-                                        {
-                                            lblDisburs_mess.Text = "Updating loan master in proccess......";
-                                            if (UpdateLoanMaster(str_batchno, BankEntryNumber, Loan_Dis_List00) == true)
-                                            {
-                                                MessageBox.Show("All Proccess successfully posted! " + Environment.NewLine + "  Batch Number=" + str_batchno + "; " + Environment.NewLine + " Bank Entry Number=" + BankEntryNumber);
-                                            }
-                                            else ojbLog.WriteLog("UpdateLoanMaster function failed......");
+                                            else { ojbLog.WriteLog(Disb_LogFile_failed, "Amount Validation Failed...."+ strLoanID); }
                                         }
                                         else
-                                        { }
-
+                                        { ojbLog.WriteLog(Disb_LogFile_failed, "Some thing error for inserting Loan Master...."+strLoanID); }
                                     }
                                     else
-                                        ojbLog.WriteLog("GLBatchEntry API failed......");
-                                }
-                                catch (Exception Err)
-                                {
-                                    //rntGLBatchEntry = false;
-                                    MessageBox.Show(deserialized);
-                                    ojbLog.WriteLog("GLBatchEntry function failed......" + Err.Message.ToString());
-                                }
+                                    {
+                                        disburscount = disburscount + 1;
+                                        lblslotcount.Text = disburscount.ToString();
+                                    FailCount = FailCount - 1;
+                                    }
+                                    if (valid_return == true)
+                                    {
+                                        try
+                                        {
+                                            strcount = strcount + 1;
+                                            ojbLog.WriteLog(logfilename,"Going to insert GLBatch Entry..........");
+                                            // System.Data.SqlClient.SqlConnection conn;
+                                            System.Data.SqlClient.SqlCommand cmd1;
+                                            conn = new System.Data.SqlClient.SqlConnection(connectionstring);
+                                            conn.Open();
+                                            // Qry to check it is tax type entry or not
+                                            string Querystring1 = " Select (sum(ISNULL(AMOUNT, 0)) * -1),SUM(CONVERT(DECIMAL, igst_amt)),SUM(CONVERT(DECIMAL, cgst_amt)),SUM(CONVERT(DECIMAL, sgst_amt))" +
+                                               "  from " + THSERVERDETS + " where LOANID = " + hdSeqNo + "  and(ISNULL(igst_amt, 0) <> 0 or ISNULL(cgst_amt, 0) <> 0)";
+                                            cmd1 = new System.Data.SqlClient.SqlCommand(Querystring1, conn);
+                                            cmd1.CommandTimeout = 180;
+                                            cmd1.CommandType = CommandType.Text;
+                                            cmd1.ExecuteNonQuery();
+                                            using (System.Data.SqlClient.SqlDataAdapter glsda = new System.Data.SqlClient.SqlDataAdapter())
+                                            {
+                                                cmd1.Connection = conn;
+                                                glsda.SelectCommand = cmd1;
+                                                using (dtgjbatch = new DataTable())
+                                                {
+                                                    glsda.Fill(dtgjbatch);
+                                                    if (dtgjbatch.Rows.Count > 0)  // if it is tax tupe entry count will be more than 0
+                                                    {
+                                                        taxType_entry = true;
+                                                        taxbase = Convert.ToDouble(dtgjbatch.Rows[0][0]);
+                                                        igstamt = Convert.ToDouble(dtgjbatch.Rows[0][1]);
+                                                        cgstamt = Convert.ToDouble(dtgjbatch.Rows[0][2]);
+                                                        sgstamt = Convert.ToDouble(dtgjbatch.Rows[0][3]);
+                                                    }
+                                                    else
+                                                    {
+                                                        taxType_entry = false;
+                                                        taxbase = 0;
+                                                        igstamt = 0;
+                                                        cgstamt = 0;
+                                                        sgstamt = 0;
+                                                    }
+                                                    // to determine igst or cgst depending on the state codes and deriving tax group
+                                                    if (strS_var == "DEFF")
+                                                        taxgroupcode = gstStateCode + "IGN";
+                                                    else
+                                                        taxgroupcode = gstStateCode + "CGN";
+
+                                                    DataSet tblibr;
+                                                    string Querystring11 = " Select LIABILITY from [" + SAGEDB + "].[dbo].TXAUTH where AUTHORITY='" + taxgroupcode + "' ; " +   // deriving tax liability account
+                                                                    " select a.id, a.loanid, '" + borrowerName + "' as borrowerName, " +
+                                                                    " case when RTRIM(a.type)= 'Processing Fee' then RTRIM(a.sage_id)+'-' + Cast(right('0'+left(b.stateid,2),2) as varchar) + '-' + Cast(right('0'+left(b.branchid,4),4) as varchar)  " +
+                                                                    " when RTRIM(a.type)= 'Verification' then RTRIM(a.sage_id)+'-00'  when RTRIM(a.type)= 'NIP' then RTRIM(a.sage_id)+Cast(right('0'+left(b.stateid,2),2) as varchar) + '-' + Cast(right('0'+left(b.branchid,4),4) as varchar)  " +
+                                                                    " when RTRIM(a.type)= 'Risk Fund' then RTRIM(a.sage_id)+'-00'  when RTRIM(a.type)= 'Hospi' then  RTRIM(a.sage_id)+'-00' " +
+                                                                    " when RTRIM(a.type)= 'Penydrop' then RTRIM(a.sage_id)   else '0'  end,  " +
+                                                                    " a.[type], a.oldloanid, a.amount , a.gst_rate, ISNULL(a.igst_amt, 0), ISNULL(a.cgst_amt, 0), ISNULL(a.sgst_amt, 0),  " +
+                                                                    " '" + DisSageAccId + "' sage_acctid from " + THSERVERDETS + " a  " +
+                                                                    " left join " + THSERVERMSTR + " b on b.loanid = a.loanid  where  a.amount <> 0 and a.loanid = '" + hdSeqNo + "'"; // selecting detail line items for journal entry
+
+                                                    cmd1 = new System.Data.SqlClient.SqlCommand(Querystring11, conn);
+                                                    cmd1.CommandTimeout = 180;
+                                                    cmd1.CommandType = CommandType.Text;
+                                                    cmd1.ExecuteNonQuery();
+                                                    using (System.Data.SqlClient.SqlDataAdapter glsds = new System.Data.SqlClient.SqlDataAdapter())
+                                                    {
+                                                        using (tblibr = new DataSet())
+                                                        {
+                                                            glsds.SelectCommand = cmd1;
+                                                            glsds.Fill(tblibr);
+                                                            if (tblibr.Tables[0].Rows.Count > 0)
+                                                            {
+                                                                taxliabilityaccount = tblibr.Tables[0].Rows[0][0].ToString().Trim();
+                                                            }
+                                                            else
+                                                            {
+                                                                ojbLog.WriteLog(logfilename,"Tax liability GL account not found  - aborting");
+                                                            }
+                                                        }
+                                                        dloanid = tblibr.Tables[1].Rows[0][1].ToString();
+                                                        sageloanacct = tblibr.Tables[1].Rows[0][11].ToString().Trim();
+                                                    }
+                                                    // creating header and detail line 
+                                                    if (taxType_entry == true)
+                                                    {
+                                                        //Entering header details
+                                                        header.SourceType = "LD";
+                                                        header.Description = sageloanacct;
+                                                        header.JournalDetails = lstDet;
+                                                    header.PostingDate = dateTimePicker2.Text + "T00:00:00Z";
+                                                    header.DocumentDate = dateTimePicker2.Text + "T00:00:00Z";
+                                                    lstHeader.Add(header);
+
+                                                        // Entering Journal details for taxes 
+                                                        detail = new ent_GLDetail();
+                                                        detail.SourceType = "TI";   // Detail source type T1 for crediting Tax liability IGST account
+                                                        detail.Reference = hdSeqNo.Trim();
+                                                        // detail.TaxAuthority = "07IGN";
+                                                        detail.Description = sageloanacct.Trim();
+                                                        detail.AccountNumber = taxliabilityaccount.Trim();
+                                                        detail.Amount = igstamt;
+                                                        lstDet.Add(detail);
+
+                                                        detail = new ent_GLDetail();
+                                                        detail.SourceType = "LC";   // Detail source type LC for debiting loan account for gst
+                                                        detail.Reference = hdSeqNo.Trim();
+                                                        detail.AccountNumber = sageloanacct.Trim();
+                                                        detail.Description = "GST";
+                                                        detail.Amount = igstamt * -1;
+                                                        lstDet.Add(detail);
+
+                                                        // ojbLog.WriteLog(logfilename,detail.ToString());
+                                                    }
+                                                    foreach (DataRow rowR in tblibr.Tables[1].Rows)
+                                                    {
+                                                        //'Creating entries for detail line which are not adjustment of old loan account
+                                                        // ' Checking & processing for charges which are subject to gst
+                                                        if (rowR[3].ToString() != "0" && rowR[6].ToString() != "0" && rowR[7].ToString() != "0")
+                                                        {
+                                                            detail = new ent_GLDetail();
+                                                            detail.AccountNumber = rowR[3].ToString().Trim();
+                                                            detail.Amount = rowR[6];
+                                                            detail.Description = rowR[1].ToString().Trim() + "-" + rowR[2].ToString().Trim();
+                                                            detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
+                                                            detail.SourceType = "X5";                                    //Taxable charge item -  5 means tax class 5 ie 18%
+                                                                                                                         //detail.TaxAuthority = "07IGN";
+                                                            lstDet.Add(detail);
+                                                            ojbLog.WriteLog(logfilename,"X5=>" + rowR[11].ToString().Trim());
+                                                            detail = new ent_GLDetail();
+                                                            detail.AccountNumber = rowR[11].ToString().Trim();
+                                                            detail.Amount = (Convert.ToDouble(rowR[6]) * -1);
+                                                            detail.Description = rowR[3].ToString().Trim() + "-" + rowR[4].ToString().Trim();
+                                                            detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
+                                                            detail.SourceType = "LC";  // Detail source type LC for debiting loan account for gst
+                                                                                       // detail.TaxAuthority = "07IGN";
+                                                            lstDet.Add(detail);
+                                                        }
+                                                        //'Checking & processing for charges which are NOT subject to gst
+                                                        if (rowR[3].ToString() != "0" && rowR[6].ToString() != "0" && rowR[7].ToString() == "0")
+                                                        {
+                                                            detail = new ent_GLDetail();
+                                                            detail.AccountNumber = rowR[3].ToString().Trim();
+                                                            detail.Amount = rowR[6];
+                                                            detail.Description = rowR[1].ToString().Trim() + "-" + rowR[2].ToString().Trim();
+                                                            detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
+                                                            detail.SourceType = "X1";                 //Non taxable charge  items
+                                                                                                      //detail.TaxAuthority = "07IGN";
+                                                            lstDet.Add(detail);
+                                                            ojbLog.WriteLog(logfilename,"X1=>" + rowR[11].ToString().Trim());
+                                                            detail = new ent_GLDetail();
+                                                            detail.AccountNumber = rowR[11].ToString().Trim();
+                                                            detail.Amount = (Convert.ToDouble(rowR[6]) * -1);
+                                                            detail.Description = rowR[3].ToString().Trim() + "-" + rowR[4].ToString().Trim();
+                                                            detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
+                                                            detail.SourceType = "LC";
+                                                            //detail.TaxAuthority = "07IGN";
+                                                            lstDet.Add(detail);
+                                                        }
+
+                                                        //'Checking & processing for old loan adjustment
+                                                        //'For crediting old loan account - credit amount
+                                                        if (rowR[3].ToString() == "0" && rowR[6].ToString() != "0" && rowR[5].ToString() != "0")
+                                                        {
+                                                            detail = new ent_GLDetail();
+                                                            detail.AccountNumber = oldacct[rowR[0].ToString().Trim()];
+                                                            detail.Amount = rowR[6];
+                                                            detail.Description = rowR[1].ToString().Trim() + "-" + rowR[2].ToString().Trim();
+                                                            detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
+                                                            detail.SourceType = "OL";
+                                                            //detail.TaxAuthority = "07IGN";
+                                                            lstDet.Add(detail);
+                                                            ojbLog.WriteLog(logfilename,"ol =>" + rowR[11].ToString().Trim());
+                                                            detail = new ent_GLDetail();
+                                                            detail.AccountNumber = rowR[11].ToString().Trim();
+                                                            detail.Amount = (Convert.ToDouble(rowR[6]) * -1);
+                                                            detail.Description = oldacct[rowR[0].ToString().Trim()];
+                                                            detail.Reference = hdSeqNo + "-" + rowR[0].ToString().Trim();
+                                                            detail.SourceType = "LO";
+                                                            // detail.TaxAuthority = "07IGN";
+                                                            lstDet.Add(detail);
+                                                        }
+                                                        ojbLog.WriteLog(logfilename,"Json Created for GL Detail line item.." + rowR[3].ToString().Trim());
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            ojbLog.WriteLog(Disb_LogFile_failed, "GLBatchEntry Inseting fail........." + ex.Message.ToString());
+                                        }
+                                        Jbatch.UpdateOperation = "Unspecified";
+                                        Jbatch.Description = "LD";
+                                        Jbatch.JournalHeaders = lstHeader;
+                                        var payloadString7 = JsonConvert.SerializeObject(Jbatch);
+                                        Loan_Dis_List = strLoanID + "," + Loan_Dis_List;
+                                        string ss = "'00" + strLoanID + "'";
+                                        Loan_Dis_List00 = ss + "," + Loan_Dis_List00;
+                                    }
+                                    else
+                                    {
+                                        FailCount = FailCount + 1;
+                                        lblValFailCount.Text = FailCount.ToString();
+                                    }
+                                
+                                    ojbLog.WriteLog(logfilename,"                                                              ");
+                                    ojbLog.WriteLog(logfilename,"--------------------------------------------------------------------------------------------");
+                                    ojbLog.WriteLog(logfilename,"                                                             ");
+
                             }
+                            if (strcount > 0)
+                                {
+                                    var payloadString = JsonConvert.SerializeObject(Jbatch);
 
+                                    lblDisburs_mess.Text = "Please wait for Batch Entry API Response......";
+                                    ojbLog.WriteLog(logfilename,payloadString.ToString());
+                                    ojbLog.WriteLog(logfilename,"JSON creater for GLBatchEntry  going for inserting ..");
 
+                                    dynamic newCustomer = POSTData(Jbatch, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/GL/GLJournalBatches");
+                                    dynamic deserialized = null;
+                                    try
+                                    {
+                                        if (newCustomer != "ERROR")
+                                        {
+                                        mstrlist = new ListBox();
+                                            deserialized = JsonConvert.DeserializeObject(newCustomer.ToString());
+                                            var rESPONSE = deserialized["JournalHeaders"];
+                                            dynamic des = JsonConvert.DeserializeObject(rESPONSE.ToString());
+                                            str_batchno = des[0].BatchNumber.ToString();
+                                            string EntryNumber = des[0].EntryNumber.ToString();
+                                            ojbLog.WriteLog(logfilename,"GL Entry creation successful....GLBatchNumbr=" + str_batchno);
+                                            Loan_Dis_List = Loan_Dis_List.Remove(Loan_Dis_List.Length - 1, 1);
+                                            Loan_Dis_List00 = Loan_Dis_List00.Remove(Loan_Dis_List00.Length - 1, 1);
+                                            lblDisburs_mess.Text = "Please wait for Bank API Response......";
+                                            Boolean bk = BankEntry(Loan_Dis_List, str_batchno);
+
+                                            if (bk == true)
+                                            {
+                                                Update_RTGS_MSTR(mstrlist);
+
+                                                lblDisburs_mess.Text = "Updating loan master in proccess......";
+                                                if (UpdateLoanMaster(str_batchno, BankEntryNumber, Loan_Dis_List00) == true)
+                                                {
+                                                    MessageBox.Show("All Proccess successfully posted! " + Environment.NewLine + "  Batch Number=" + str_batchno + "; " + Environment.NewLine + "Last Bank Entry Number=--" + BankEntryNumber);
+                                                getList();
+                                            }
+                                                else ojbLog.WriteLog(Disb_LogFile_failed, "UpdateLoanMaster function failed......");
+                                            }
+                                            else
+                                            { }
+                                        }
+                                        else
+                                            ojbLog.WriteLog(Disb_LogFile_failed, "GLBatchEntry API failed......");
+                                    }
+                                    catch (Exception Err)
+                                    {
+                                        //rntGLBatchEntry = false;
+                                        MessageBox.Show(deserialized);
+                                        ojbLog.WriteLog(Disb_LogFile_failed, "GLBatchEntry function failed......" + Err.Message.ToString());
+                                    }
+                                }
+                           // }
+
+                          
                         }
                         else
                         {
                             //Data Empty
-                            ojbLog.WriteLog("No records to process.......");
+                            ojbLog.WriteLog(logfilename,"No records to process.......");
                             // MessageBox.Show("Empty table 'LNDISBH'...");
                         }
                     }
@@ -609,10 +617,72 @@ namespace Loan_C
             }
             catch (Exception ex)
             {
-                ojbLog.WriteLog("GLJAccountController function failed...." + ex.Message);
+                ojbLog.WriteLog(Disb_LogFile_failed, "GLJAccountController function failed...." + ex.Message);
             }
             // }
 
+        }
+        public Boolean Insert_LoanIdMStr_BC(string sLoanid,string bc_id,string bc_name)
+        {
+            
+            Boolean lnReturn = false;
+            System.Data.SqlClient.SqlConnection conn;
+            System.Data.SqlClient.SqlCommand cmdR;
+            conn = new System.Data.SqlClient.SqlConnection(connectionstring);
+            conn.Open();
+            using (System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter())
+            {
+              // ojbLog.WriteLog(logfilename,"Loan Id does not exist in loan master..");
+                try
+                {
+                    ojbLog.WriteLog(logfilename,"Going to insert Loan Id in loan master..");
+                    String SS = "CTLOAN.[dbo].InsertLoanMaster_ByLoanID";
+                    cmdR = new System.Data.SqlClient.SqlCommand(SS, conn);
+                    cmdR.CommandTimeout = 180;
+                    cmdR.CommandType = CommandType.StoredProcedure;
+                    cmdR.Parameters.AddWithValue("@loan_id", SqlDbType.VarChar).Value = "00"+sLoanid;
+                    cmdR.Parameters.AddWithValue("@bc_id", SqlDbType.VarChar).Value = bc_id;
+                    cmdR.Parameters.AddWithValue("@bc_name", SqlDbType.VarChar).Value = bc_name;
+                    sda.SelectCommand = cmdR;
+                    cmdR.ExecuteNonQuery();
+                    DataTable dtRunSeq;
+                    using (dtRunSeq = new DataTable())
+                    {
+                        sda.Fill(dtRunSeq);
+                        if (dtRunSeq.Rows.Count > 0)
+                        {
+                            foreach (DataRow row in dtRunSeq.Rows)
+                            {
+                               // if (row["EXIST"].ToString() == "EXIST")
+                              //  {
+                                    borrowerName = row["borrower_name"].ToString();
+                                    DisSageAccId = row["sage_acctid"].ToString();
+                                   // ojbLog.WriteLog(logfilename,"Loan Id already Exist!");
+                               // }
+                               // else {
+                                  //  borrowerName = row["borrower_name"].ToString();
+                                  //  DisSageAccId = row["sage_acctid"].ToString();
+                                    ojbLog.WriteLog(logfilename,"Loan Id successfully inserted in loan master..");
+                               // }
+                                lnReturn = true;
+                            }
+
+                        }
+                        else
+                        {
+                            ojbLog.WriteLog(Disb_LogFile_failed, "Loan Id could not be inserted in loan master!");
+
+                        }
+                    }
+                    lnReturn = true;
+                }
+                catch (Exception ex)
+                {
+                    ojbLog.WriteLog(Disb_LogFile_failed, "Error  Query execution time -!" + ex);
+                }
+            }   
+            conn.Close();
+            return lnReturn;
         }
         public Boolean CHK_LOAN_Disb(string sLoanid)
         {
@@ -637,19 +707,19 @@ namespace Loan_C
                     sda.Fill(lndisbrh_tbl);
                     if (lndisbrh_tbl.Rows.Count > 0)
                     {
-                        ojbLog.WriteLog("Loan Id already disbursed...");
+                        ojbLog.WriteLog(logfilename,"Loan Id already disbursed...");
                         lnReturn = false;
                     }
                     else
                     {
-                        ojbLog.WriteLog("Loan Id  to be disburse...");
+                        ojbLog.WriteLog(logfilename,"Loan Id  to be disburse...");
                     }
                 }
             }
             conn.Close();
             return lnReturn;
         }
-        public Boolean CHK_LNID_LNLOAN(string sLoanid)
+        public Boolean CHK_LNID_LNLOAN(string sLoanid, int bc_id, string bc_name)
         {
             DataTable lndisbrh_tbl;
             Boolean lnReturn = false;
@@ -671,9 +741,9 @@ namespace Loan_C
                 using (lndisbrh_tbl = new DataTable())
                 {
                     sda.Fill(lndisbrh_tbl);
-                    if (lndisbrh_tbl.Rows.Count > 0)
+                    if (lndisbrh_tbl.Rows.Count > 0 )
                     {
-                        ojbLog.WriteLog("Loan Id exist in loan master..");
+                        ojbLog.WriteLog(logfilename,"Loan Id exist in loan master..");
                         borrowerName = lndisbrh_tbl.Rows[0]["borrower_name"].ToString();
                         DisSageAccId = lndisbrh_tbl.Rows[0]["sage_acctid"].ToString();
                         lnReturn = true;
@@ -681,15 +751,17 @@ namespace Loan_C
                     }
                     else
                     {
-                        ojbLog.WriteLog("Loan Id does not exist in loan master..");
+                        ojbLog.WriteLog(logfilename,"Loan Id does not exist in loan master..");
                         try
                         {
-                            ojbLog.WriteLog("Going to insert Loan Id in loan master..");
+                            ojbLog.WriteLog(logfilename,"Going to insert Loan Id in loan master..");
                             String SS = "CTLOAN.[dbo].InsertLoanMaster_ByLoanID";
                             cmdR = new System.Data.SqlClient.SqlCommand(SS, conn);
                             cmdR.CommandTimeout = 180;
                             cmdR.CommandType = CommandType.StoredProcedure;
                             cmdR.Parameters.AddWithValue("@loan_id", SqlDbType.Int).Value = sLoanid;
+                            cmdR.Parameters.AddWithValue("@bc_id", SqlDbType.Int).Value = bc_id;
+                            cmdR.Parameters.AddWithValue("@bc_name", SqlDbType.VarChar).Value = bc_name;
                             sda.SelectCommand = cmdR;
                             cmdR.ExecuteNonQuery();
                             DataTable dtRunSeq;
@@ -703,13 +775,13 @@ namespace Loan_C
                                         borrowerName = row["borrower_name"].ToString();
                                         DisSageAccId = row["sage_acctid"].ToString();
                                         lnReturn = true;
-                                        ojbLog.WriteLog("Loan Id successfully inserted in loan master..");
+                                        ojbLog.WriteLog(logfilename,"Loan Id successfully inserted in loan master..");
                                     }
 
                                 }
                                 else
                                 {
-                                    ojbLog.WriteLog("Loan Id could not be inserted in loan master!");
+                                    ojbLog.WriteLog(Disb_LogFile_failed, "Loan Id could not be inserted in loan master!");
 
                                 }
                             }
@@ -717,7 +789,7 @@ namespace Loan_C
                         }
                         catch (Exception ex)
                         {
-                            ojbLog.WriteLog("Error  Query execution time -!" + ex);
+                            ojbLog.WriteLog(Disb_LogFile_failed, "Error  Query execution time -!" + ex);
                         }
                     }
                 }
@@ -765,26 +837,26 @@ namespace Loan_C
                     sda.Fill(dtCheckamt);
                 }
                 else
-                { ojbLog.WriteLog("Amount validation failed SQL Query.."); }
+                { ojbLog.WriteLog(Disb_LogFile_failed, "Amount validation failed SQL Query.."); }
                 if (dtCheckamt.Rows.Count > 0)
                 {
                     if (p_DefLoanDesc == Convert.ToDouble(dtCheckamt.Rows[0]["TransD"]) * -1)
                     {
                         ReturnVlidation = true;
-                        ojbLog.WriteLog("Amount validation passed...");
+                        ojbLog.WriteLog(logfilename,"Amount validation passed...");
                     }
                     else
                     {
                         ReturnVlidation = false;
-                        ojbLog.WriteLog("Amount validation failed....");
+                        ojbLog.WriteLog(Disb_LogFile_failed, "Amount validation failed....");
                     }
                 }
-                else { ojbLog.WriteLog("Amount validation failed else condition...."); }
+                else { ojbLog.WriteLog(Disb_LogFile_failed, "Amount validation failed else condition...."); }
             }
             catch (Exception Err)
             {
 
-                ojbLog.WriteLog("checkamtvalidation function failed......" + Err.Message.ToString());
+                ojbLog.WriteLog(Disb_LogFile_failed, "checkamtvalidation function failed......" + Err.Message.ToString());
             }
 
             return ReturnVlidation;
@@ -812,16 +884,16 @@ namespace Loan_C
                 if (dtCheckamt.Rows.Count > 0)
                 {
                     returnvalue = true;
-                    ojbLog.WriteLog("Loan GL Account exist in Sage.....");
+                    ojbLog.WriteLog(logfilename,"Loan GL Account exist in Sage.....");
                 }
                 else
                 {
-                    ojbLog.WriteLog("Loan GL Account does not exist in Sage.....");
+                    ojbLog.WriteLog(logfilename,"Loan GL Account does not exist in Sage.....");
                     if (CheckGLSegments(LoanId) == true)
                     {
                         if (CreateGLAccount(LoanId) == true)
                         {
-                            ojbLog.WriteLog("GL account successfuly inserted....." + LoanId);
+                            ojbLog.WriteLog(logfilename,"GL account successfuly inserted....." + LoanId);
                             returnvalue = true;
                         }
                         else { returnvalue = false; }
@@ -831,10 +903,11 @@ namespace Loan_C
             catch (Exception ex)
             {
                 returnvalue = false;
-                ojbLog.WriteLog("Getaccountid_status function failed..." + ex.Message);
+                ojbLog.WriteLog(Disb_LogFile_failed, "Getaccountid_status function failed..." + ex.Message);
             }
             return returnvalue;
         }
+      
         public Boolean CheckGLSegments(String loanid)
         {
             Boolean chkSegment;
@@ -842,7 +915,7 @@ namespace Loan_C
             try
             {
                 // CHK_LNID_LNLOAN(loanid);
-                ojbLog.WriteLog("Checking GL Segment value before inserting into Sage.....");
+                ojbLog.WriteLog(logfilename,"Checking GL Segment value before inserting into Sage.....");
                 Boolean apReturn03 = false;
                 Boolean apReturn04 = false;
                 Boolean apReturn05 = false;
@@ -856,14 +929,14 @@ namespace Loan_C
 
                 if (apReturn03 == apReturn04 == apReturn05 == apReturn06 == true && apReturn08 == false)
                 {
-                    ojbLog.WriteLog("state, cluster, District and branch segement exist in Sage.....");
+                    ojbLog.WriteLog(logfilename,"state, cluster, District and branch segement exist in Sage.....");
                     var detail = new
                     {
                         SegmentNumber = "000008",
                         SegmentCodeKey = DisSageAccId.Trim().Substring(22, 8),
                         SegmentCodeDescription = borrowerName
                     };
-                    ojbLog.WriteLog("Going to insert loan segment.........");
+                    ojbLog.WriteLog(logfilename,"Going to insert loan segment.........");
 
                     dynamic SegmentResponse = POSTData(detail, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/" + @"GL/GLSegmentCodes");
                     dynamic deserialized = null;
@@ -872,24 +945,24 @@ namespace Loan_C
                         deserialized = JsonConvert.DeserializeObject(SegmentResponse.ToString());
                         string SegmentCodeKey = deserialized.SegmentCodeKey;
                         chkSegment = true;
-                        ojbLog.WriteLog("Loan segment successfully inserted.........");
+                        ojbLog.WriteLog(logfilename,"Loan segment successfully inserted.........");
                     }
                     catch (Exception err)
                     {
-                        ojbLog.WriteLog("Loan SegmentResponse API Failed " + err.Message);
+                        ojbLog.WriteLog(Disb_LogFile_failed, "Loan SegmentResponse API Failed " + err.Message);
                     }
 
                     //chkSegment = true;
                 }
                 else if (apReturn03 == false || apReturn04 == false || apReturn05 == false || apReturn06 == false)
                 {
-                    ojbLog.WriteLog("One of the segement in state, cluster, District and branch does not exist in Sage.....");
+                    ojbLog.WriteLog(logfilename,"One of the segement in state, cluster, District and branch does not exist in Sage.....");
                 }
-                else { ojbLog.WriteLog("Loan id  exist in Sage....."); chkSegment = true; }
+                else { ojbLog.WriteLog(logfilename,"Loan id  exist in Sage....."); chkSegment = true; }
             }
             catch (Exception Err)
             {
-                ojbLog.WriteLog("CheckGLSegments function failed......" + Err.Message.ToString());
+                ojbLog.WriteLog(Disb_LogFile_failed, "CheckGLSegments function failed......" + Err.Message.ToString());
             }
             return chkSegment;
         }
@@ -918,11 +991,11 @@ namespace Loan_C
                             if (results12.Count > 0)
                             {
                                 apiReturn = true;
-                                ojbLog.WriteLog("SegmentNumber= " + segNumber + "  validated!");
+                                ojbLog.WriteLog(logfilename,"SegmentNumber= " + segNumber + "  validated!");
                             }
                             else
                             {
-                                ojbLog.WriteLog("SegmentNumber= " + segNumber + " Not validated!");
+                                ojbLog.WriteLog(logfilename,"SegmentNumber= " + segNumber + " Not validated!");
                                 apiReturn = false;
                             }
 
@@ -932,7 +1005,7 @@ namespace Loan_C
             }
             catch (Exception)
             {
-                ojbLog.WriteLog("Some thing wrong in SegmentAPI Method");
+                ojbLog.WriteLog(logfilename,"Some thing wrong in SegmentAPI Method");
                 apiReturn = false;
             }
 
@@ -954,7 +1027,7 @@ namespace Loan_C
                     StructureCode = "ASCDBL",
                     AccountGroupCode = "07"
                 };
-                ojbLog.WriteLog("GL Account Inserting in sage.......");
+                ojbLog.WriteLog(logfilename,"GL Account Inserting in sage.......");
                 dynamic newGLAccount = POSTData(GLAccount, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/" + @"GL/GLAccounts");
                 dynamic deserialized = null;
                 try
@@ -962,19 +1035,19 @@ namespace Loan_C
                     deserialized = JsonConvert.DeserializeObject(newGLAccount.ToString());
                     string AccountNumber = deserialized.AccountNumber;
                     GlReturn = true;
-                    ojbLog.WriteLog("Gl Account inserted successfully.........");
+                    ojbLog.WriteLog(logfilename,"Gl Account inserted successfully.........");
                 }
                 catch (Exception err)
                 {
-                    ojbLog.WriteLog("Loan SegmentResponse API Failed " + err.Message);
+                    ojbLog.WriteLog(Disb_LogFile_failed, "Loan SegmentResponse API Failed " + err.Message);
                 }
-                ojbLog.WriteLog("GL Account Inserted in sage");
+                ojbLog.WriteLog(logfilename,"GL Account Inserted in sage");
 
             }
             catch (Exception Err)
             {
                 GlReturn = false;
-                ojbLog.WriteLog("GL Account Insert failed....." + Err.Message.ToString());
+                ojbLog.WriteLog(Disb_LogFile_failed, "GL Account Insert failed....." + Err.Message.ToString());
             }
             return GlReturn;
         }
@@ -992,7 +1065,7 @@ namespace Loan_C
                 System.Data.SqlClient.SqlCommand cmd1;
                 conn = new System.Data.SqlClient.SqlConnection(connectionstring);
                 conn.Open();
-                ojbLog.WriteLog("Checking GL Accounts of detail line.......");
+                ojbLog.WriteLog(logfilename,"Checking GL Accounts of detail line.......");
 
                 string Querystring = "Select * from " + THSERVERDETS + " where amount<>0 And loanid = " + loanId;
                 cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
@@ -1022,44 +1095,54 @@ namespace Loan_C
                                     if (strbranchId.Trim().Length == 3)
                                         strbranchId = "0" + strbranchId;
 
+                                    if (strstate.Trim().Length == 1)
+                                        strstate = "0" + strstate;
+
                                     string id1 = "";
                                     if (TransDesc == "NIP")
                                     {
 
                                         //id1 = "30103-07-9999";
                                         id1 = sageid + "-" + strstate + "-" + strbranchId;
-                                        ojbLog.WriteLog("Checking transaction type...." + row[2] + "-" + id1);
+                                        ojbLog.WriteLog(logfilename,"Checking transaction type...." + row[2] + "-" + id1);
                                         sqlQry = "SELECT * FROM [" + SAGEDB + "].dbo.GLAMF  where ACCTFMTTD='" + id1 + "'";
                                     }
                                     if (TransDesc == "Interest")
                                     {
                                         //id1 = "30103-07-9999";
                                         id1 = sageid + "-" + strstate + "-" + strbranchId;
-                                        ojbLog.WriteLog("Checking transaction type...." + row[2] + "-" + id1);
+                                        ojbLog.WriteLog(logfilename,"Checking transaction type...." + row[2] + "-" + id1);
                                         sqlQry = "SELECT * FROM [" + SAGEDB + "].dbo.GLAMF  where ACCTFMTTD='" + id1 + "'";
                                     }
                                     if (TransDesc == "Processing Fee")
                                     {
                                         id1 = sageid + "-" + strstate + "-" + strbranchId;
-                                        ojbLog.WriteLog("Checking transaction type...." + row[2] + "-" + id1);
+                                        ojbLog.WriteLog(logfilename,"Checking transaction type...." + row[2] + "-" + id1);
                                         sqlQry = "SELECT * FROM [" + SAGEDB + "].dbo.GLAMF  where ACCTFMTTD='" + id1 + "'";
                                     }
                                     if (TransDesc == "Verification")
                                     {
                                         id1 = sageid + "-00";
-                                        ojbLog.WriteLog("Checking transaction type...." + row[2] + "-" + id1);
+                                        ojbLog.WriteLog(logfilename,"Checking transaction type...." + row[2] + "-" + id1);
                                         sqlQry = "SELECT * FROM [" + SAGEDB + "].dbo.GLAMF  where ACCTFMTTD='" + id1 + "'";
                                     }
                                     if (TransDesc == "Risk Fund")
                                     {
                                         id1 = sageid + "-00";
-                                        ojbLog.WriteLog("Checking transaction type...." + row[2] + "-" + id1);
+                                        ojbLog.WriteLog(logfilename,"Checking transaction type...." + row[2] + "-" + id1);
                                         sqlQry = "SELECT * FROM [" + SAGEDB + "].dbo.GLAMF  where ACCTFMTTD='" + id1 + "'";
                                     }
                                     if (TransDesc == "Hospi")
                                     {
                                         id1 = sageid + "-00";
-                                        ojbLog.WriteLog("Checking transaction type...." + row[2] + "-" + id1);
+                                        ojbLog.WriteLog(logfilename,"Checking transaction type...." + row[2] + "-" + id1);
+                                        sqlQry = "SELECT * FROM [" + SAGEDB + "].dbo.GLAMF  where ACCTFMTTD='" + id1 + "'";
+                                    }
+
+                                    if (TransDesc == "Penydrop")
+                                    {
+                                        id1 = sageid;
+                                        ojbLog.WriteLog(logfilename, "Checking transaction type...." + row[2] + "-" + id1);
                                         sqlQry = "SELECT * FROM [" + SAGEDB + "].dbo.GLAMF  where ACCTFMTTD='" + id1 + "'";
                                     }
                                     cmd1 = new System.Data.SqlClient.SqlCommand(sqlQry, conn);
@@ -1077,18 +1160,22 @@ namespace Loan_C
                                             {
                                                 count_dis = count_dis + 1;
                                                 loandisbdetails = true;
-                                                ojbLog.WriteLog("Exist transaction type...." + row[2] + "-" + id1);
+                                                ojbLog.WriteLog(logfilename,"Exist transaction type...." + row[2] + "-" + id1);
                                             }
                                             else
                                             {
-
-                                                ojbLog.WriteLog("Does not exist transaction type...." + row[2] + "-" + id1);
+                                                ojbLog.WriteLog(logfilename,"Does not exist transaction type...." + row[2] + "-" + id1);
                                             }
                                         }
                                     }
                                 }
                                 else if (oldloanid != "0")
                                 {
+                                    try
+                                    {
+
+                                    
+                                    ojbLog.WriteLog(logfilename, "Old loan id "+oldloanid+ " in process");
                                     DataTable dtOldLN;
                                     DataTable dtOldLN_Sg;
                                     string sqlQry = " Select loan_id, sage_acctid from [CTLOAN].[DBO].LNMSTR where loan_id = '00" + oldloanid + "' ";
@@ -1107,9 +1194,9 @@ namespace Loan_C
                                             {
 
                                                 string Acc_Mstr = dtOldLN.Rows[0]["sage_acctid"].ToString();
-                                                ojbLog.WriteLog(row[0].ToString() + " 000000 " + Acc_Mstr);
+                                                ojbLog.WriteLog(logfilename,row[0].ToString() + " 000000 " + Acc_Mstr);
                                                 //loandisbdetails = false;
-                                                // ojbLog.WriteLog("Account exist........." + row[0]);
+                                                // ojbLog.WriteLog(logfilename,"Account exist........." + row[0]);
                                                 string strQry = " Select * from [" + SAGEDB + "].dbo.GLAMF where ACCTFMTTD = '" + Acc_Mstr + "' ";
                                                 cmd1 = new System.Data.SqlClient.SqlCommand(strQry, conn);
                                                 cmd1.CommandTimeout = 180;
@@ -1126,28 +1213,32 @@ namespace Loan_C
                                                         {
                                                             count_dis = count_dis + 1;
                                                             loandisbdetails = true;
-                                                            ojbLog.WriteLog(row[0].ToString() + " 000000 " + Acc_Mstr);
+                                                            ojbLog.WriteLog(logfilename,row[0].ToString() + " 000000 " + Acc_Mstr);
                                                             oldacct.Add(row[0].ToString(), Acc_Mstr);
-                                                            ojbLog.WriteLog("old loan Account exist........." + row[0]);
+                                                            ojbLog.WriteLog(logfilename,"old loan Account exist........." + row[0]);
                                                         }
                                                         else
                                                         {
 
-                                                            ojbLog.WriteLog("old loan Account does not exist in Sage ......" + row[0]);
+                                                            ojbLog.WriteLog(logfilename,"old loan Account does not exist in Sage ......" + row[0]);
                                                         }
                                                     }
                                                 }
                                             }
                                             else
                                             {
-
-                                                ojbLog.WriteLog("Account does not exist in Loan Master........." + row[0]);
+                                                ojbLog.WriteLog(logfilename,"Old Loan Account does not exist in Loan Master........." + row[0]);
                                             }
                                         }
                                     }
-                                    //Select loan_id, sage_acctid from LNMSTR where loan_id = 'oldloanid';
+                                        //Select loan_id, sage_acctid from LNMSTR where loan_id = 'oldloanid';
 
-                                    //Select* from GLAMF where ACCTFMTTD = '11103-08-009-043-0166-00891226'
+                                        //Select* from GLAMF where ACCTFMTTD = '11103-08-009-043-0166-00891226'
+                                    }
+                                    catch (Exception Err)
+                                    {
+                                        ojbLog.WriteLog(Disb_LogFile_failed, "OldLoan id function fail....." + Err.Message.ToString());
+                                    }
                                 }
 
                             }
@@ -1162,7 +1253,7 @@ namespace Loan_C
             catch (Exception Err)
             {
 
-                ojbLog.WriteLog("loandisbdetails function failed......" + Err.Message.ToString());
+                ojbLog.WriteLog(Disb_LogFile_failed, "loandisbdetails function failed......" + Err.Message.ToString());
             }
             return loandisbdetails;
         }
@@ -1171,7 +1262,7 @@ namespace Loan_C
             Boolean retrnBatchEntryNo = false;
             try
             {
-                ojbLog.WriteLog("UpdateLoanMaster  Loan Id List" + hdSeqNo);
+                ojbLog.WriteLog(logfilename,"UpdateLoanMaster  Loan Id List" + hdSeqNo);
                 System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter();
                 System.Data.SqlClient.SqlConnection connR;
                 System.Data.SqlClient.SqlCommand cmdR;
@@ -1182,7 +1273,7 @@ namespace Loan_C
                 cmdR.CommandTimeout = 180;
                 cmdR.CommandType = CommandType.Text;
                 int res = cmdR.ExecuteNonQuery();
-                ojbLog.WriteLog("Update loan master Status:" + res);
+                ojbLog.WriteLog(logfilename,"Update loan master Status:" + res);
                 if (res >= 1)
                     retrnBatchEntryNo = true;
                 if (connR.State == System.Data.ConnectionState.Open)
@@ -1190,7 +1281,7 @@ namespace Loan_C
             }
             catch (Exception Err)
             {
-                ojbLog.WriteLog("UpdateLoanMaster function failed......" + Err.Message.ToString());
+                ojbLog.WriteLog(logfilename,"UpdateLoanMaster function failed......" + Err.Message.ToString());
             }
             return retrnBatchEntryNo;
         }
@@ -1203,7 +1294,7 @@ namespace Loan_C
             System.Data.SqlClient.SqlCommand cmd;
             conn = new System.Data.SqlClient.SqlConnection(connectionstring);
             conn.Open();
-            ojbLog.WriteLog("Loan Id List for bk entry" + str_Listloanid);
+            ojbLog.WriteLog(logfilename,"Loan Id List for bk entry" + str_Listloanid);
             //string Querystring = "Select sage_acctid, benf_acctno, Ifsc_code, benfbank_name, benbank_branch, borrower_name, disbursement_amt " +
             //                  "from LNDSDB.dbo.disbursement_master where glbatch_no='" + str_batchno + "'";
             string Querystring = "Select lm.sage_acctid, dm.account_number benf_acctno, dm.Ifsc_code, dm.bank_name benfbank_name,dm.bank_branch benbank_branch,lm.borrower_name, dm.net_amount, lm.loan_id " +
@@ -1224,10 +1315,10 @@ namespace Loan_C
 
                     if (tbBank.Rows.Count > 0)
                     {
-                        ojbLog.WriteLog("Loan Id countor bk entry=>" + tbBank.Rows.Count);
+                        ojbLog.WriteLog(logfilename,"Loan Id countor bk entry=>" + tbBank.Rows.Count);
                         foreach (DataRow rw in tbBank.Rows)
                         {
-                            ojbLog.WriteLog("Bank entry create for Loan Id= " + "LD-" + str_batchno + "-" + rw["loan_id"].ToString());
+                            ojbLog.WriteLog(logfilename,"Bank entry create for Loan Id= " + "LD-" + str_batchno + "-" + rw["loan_id"].ToString());
                             dynamic BK = new ExpandoObject();
                             var obj = (IDictionary<string, object>)BK;
                             var objerrList = (IDictionary<string, object>)person;
@@ -1251,21 +1342,30 @@ namespace Loan_C
                             //counter9 = counter9 + 1;
 
                             obj.Add("BankEntryDetail", objBn);
+                            ojbLog.WriteLog(logfilename,JsonConvert.SerializeObject(obj));
                             string ss = "";
                             dynamic newCustomer = POSTData(obj, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/BK/BKBankEntries");
                             dynamic deserialized = JsonConvert.DeserializeObject(newCustomer.ToString());
-                            try
+                            if (newCustomer != "Conflict")
                             {
-                                ss = deserialized.BankEntryNumber;
-                                ojbLog.WriteLog("Bank entry created-Entry No- " + ss);
-                                strRtrn = true;
+                                try
+                                {
+                                    string loanid = Convert.ToUInt32(rw["loan_id"].ToString()).ToString();
+                                        string qry = "";
+                                    ss = deserialized.BankEntryNumber;
+                                    qry = "UPDATE " + THSERVERMSTR + "  SET SAGE_GL_BATCHNO='" + str_batchno + "'  ,SAGE_GL_BANK_ENTRYNO='" + ss + "' WHERE Convert(date,disbdate,100)='" + dateTimePicker2.Text + "' AND LOANID='" + loanid + "'";
+                                    mstrlist.Items.Add(qry);
+                                    ojbLog.WriteLog(logfilename, "Bank entry created-Entry No- " + ss);
+                                    strRtrn = true;
+                                }
+                                catch (Exception ex)
+                                {
+                                    strRtrn = false;
+                                    ojbLog.WriteLog(logfilename, "Bank Method, Some thing wrong......." + ex.Message.ToString());
+                                }
+                                BankEntryNumber = ss;
                             }
-                            catch (Exception ex)
-                            {
-                                strRtrn = false;
-                                ojbLog.WriteLog("Bank Method, Some thing wrong......." + ex.Message.ToString());
-                            }
-                            BankEntryNumber = ss;
+                            else ojbLog.WriteLog(logfilename, "Bank api response conflict..");
 
                         }
                     }
@@ -1274,16 +1374,45 @@ namespace Loan_C
             }
             return strRtrn;
         }
+
+        public Boolean Update_RTGS_MSTR(ListBox lmbx)
+        {
+            Boolean retrnBatchEntryNo = false;
+            try
+            {
+                ojbLog.WriteLog(logfilename, "UpdateLoanMaster  Loan Id List" + hdSeqNo);
+                System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter();
+                System.Data.SqlClient.SqlConnection connR;
+                System.Data.SqlClient.SqlCommand cmdR;
+                connR = new System.Data.SqlClient.SqlConnection(connectionstring); //,dis_BKEntry='" + bkEntry + "'
+                connR.Open();
+                foreach(var item in lmbx.Items)
+                { 
+                                  // MessageBox.Show(item.ToString());
+                cmdR = new System.Data.SqlClient.SqlCommand(item.ToString(), connR);
+                cmdR.CommandTimeout = 180;
+                cmdR.CommandType = CommandType.Text;
+                int res = cmdR.ExecuteNonQuery();
+                ojbLog.WriteLog(logfilename, "Update loan master Status:" + res);
+                if (res >= 1)
+                    retrnBatchEntryNo = true;
+                }
+                if (connR.State == System.Data.ConnectionState.Open)
+                    connR.Close();
+            }
+            catch (Exception Err)
+            {
+                ojbLog.WriteLog(logfilename, "UpdateLoanMaster function failed......" + Err.Message.ToString());
+            }
+            return retrnBatchEntryNo;
+        }
+
         #endregion
 
         #region Collection--------------------------------------
-        private void btnGoC_Click(object sender, EventArgs e)
+
+        public void colList()
         {
-            lblCol_messege.Text = "Please wait .....";
-
-            ojbLog.WriteLog("---------------Start Validation Date Time " + System.DateTime.Now.ToString() + "---------------");
-            btnGoC.Enabled = false;
-
             #region  New Code ---Branch wise--------
 
 
@@ -1300,11 +1429,11 @@ namespace Loan_C
             conn.Open();
             string Querystring = " select count(*) TotalCount from " + THSERVERCOLL + "  where Received_Amt<>0  and sageacct_branchcash IS NOT NULL and GLBatch_No is null and " +
                    " Convert(date, Received_Date, 100) = '" + dateTimePicker3.Text + "' ;" +
-                   " Select id, l.branch_id, l.loan_id,sage_acctid,d.sageacct_branchcash,d.received_Amt,d.Received_Date,d.ClientName,d.Receiptid from [CTLOAN].dbo.LNMSTR l  " +
+                   " Select id, l.branch_id, l.loan_id,sage_acctid,d.sageacct_branchcash,d.received_Amt,d.Received_Date,d.ClientName,d.Receiptid,d.sage_credit_gl,d.[type] from [CTLOAN].dbo.LNMSTR l  " +
                    " inner join " + SAGEDB + ".dbo.GLAMF s on l.sage_acctid = s.ACCTFMTTD " +
                    " inner join " + THSERVERCOLL + " d on d.loanid=right('0000000'+left(l.loan_id,8),8) " +
                    " inner join " + SAGEDB + ".dbo.GLAMF s1 on d.sageacct_branchcash = s1.ACCTFMTTD " +
-                   " where  s.ACTIVESW=1 and d.Received_Amt <>0  and d.sageacct_branchcash IS NOT NULL and d.GLBatch_No is null and Convert(date,d.Received_Date,100)='" + dateTimePicker3.Text + "' ";
+                   " where  s.ACTIVESW=1 and l.bc_id is null and d.Received_Amt <>0  and d.sageacct_branchcash IS NOT NULL and d.GLBatch_No is null and Convert(date,d.Received_Date,100)='" + dateTimePicker3.Text + "' ";
             cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
             cmd.CommandTimeout = 180;
             cmd.CommandType = CommandType.Text;
@@ -1320,7 +1449,6 @@ namespace Loan_C
                     if (tbGRD_col.Tables[1].Rows.Count > 0)
                     {
                         lblCollTotal.Text = tbGRD_col.Tables[0].Rows[0]["TotalCount"].ToString();
-
                         dataGridView1.DataSource = tbGRD_col.Tables[1];
                         dataGridView1.EnableHeadersVisualStyles = false;
                         dataGridView1.ColumnHeadersDefaultCellStyle.BackColor = Color.Gray;
@@ -1358,13 +1486,103 @@ namespace Loan_C
                 }
             }
             #endregion
+        }
 
+        public void colListError()
+        {
+            #region  New Code ---Branch wise--------
+
+
+            dynamic GL = new ExpandoObject();
+            var obj = (IDictionary<string, object>)GL;
+
+            JList = new List<ent_GLJBtch>();
+            update_JList = new List<string>();
+
+            DataTable dtnew = new DataTable();
+            System.Data.SqlClient.SqlConnection conn;
+            System.Data.SqlClient.SqlCommand cmd;
+            conn = new System.Data.SqlClient.SqlConnection(connectionstring);
+            conn.Open();
+            string Querystring = " select count(*) TotalCount from " + THSERVERCOLL + "  where  GLBatch_No is null and " +
+                   " Convert(date, Received_Date, 100) = '" + dateTimePicker3.Text + "' ;" +
+                   " Select id, d.branch_id, d.loanid,'LNMSTR' sage_acctid,d.sageacct_branchcash,d.received_Amt,d.Received_Date,d.ClientName,d.Receiptid,d.sage_credit_gl,d.[type] from " + THSERVERCOLL + " d  " +
+                  // " inner join " + THSERVERCOLL + " d on d.loanid=right('0000000'+left(l.loan_id,8),8) " +
+                   " where d.GLBatch_No is null and Convert(date,d.Received_Date,100)='" + dateTimePicker3.Text + "' ";
+            cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
+            cmd.CommandTimeout = 180;
+            cmd.CommandType = CommandType.Text;
+            cmd.ExecuteNonQuery();
+            using (System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter())
+            {
+                var objerrList = (IDictionary<string, object>)person;
+                cmd.Connection = conn;
+                sda.SelectCommand = cmd;
+                using (tbGRD_col = new DataSet())
+                {
+                    sda.Fill(tbGRD_col);
+                    if (tbGRD_col.Tables[1].Rows.Count > 0)
+                    {
+                        lblCollTotal.Text = tbGRD_col.Tables[0].Rows[0]["TotalCount"].ToString();
+                        dataGridView1.DataSource = tbGRD_col.Tables[1];
+                        dataGridView1.EnableHeadersVisualStyles = false;
+                        dataGridView1.ColumnHeadersDefaultCellStyle.BackColor = Color.Gray;
+                        dataGridView1.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+
+                       // dataGridView1.Columns[].DefaultCellStyle.BackColor = Color.Red;
+                        // dgw_deposit.ColumnHeadersHeight = 50;
+                        dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.EnableResizing;
+                        dataGridView1.ColumnHeadersHeight = 30;
+                        dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+                        dataGridView1.ColumnHeadersDefaultCellStyle.Font = new Font("Tahoma", 9.75F, FontStyle.Bold);
+                        DataView viewSlot = new DataView(tbGRD_col.Tables[1]);
+
+                        if (tbGRD_col.Tables[1].Rows.Count > 0)
+                        {
+
+                            DataView view1 = new DataView(tbGRD_col.Tables[1]);
+                            view1.Sort = "branch_id asc";
+                            DataTable tb_distinctValues = view1.ToTable(true, "branch_id");
+                            tbdisTocmb = view1.ToTable(true, "branch_id");
+
+                            cmb_col_to.DisplayMember = "branch_id";
+                            cmb_col_to.ValueMember = "branch_id";
+                            cmb_col_to.DataSource = tbdisTocmb;
+
+                            cmb_col_from.DisplayMember = "branch_id";
+                            cmb_col_from.ValueMember = "branch_id";
+                            cmb_col_from.DataSource = tb_distinctValues;
+
+                            lblSuccess_cc.Text = Convert.ToString(tbGRD_col.Tables[1].Rows.Count);
+                        }
+                        //JList.Add(Jbatch_c);
+                        //update_JList.Add(SageACC_Dis_List.Remove(SageACC_Dis_List.Length - 1));
+
+                    }
+                    else { MessageBox.Show("Data not found!"); }
+                }
+            }
+            #endregion
+        }
+
+        private void btnGoC_Click(object sender, EventArgs e)
+        {
+            ojbLog.WriteLog(logfilename,"---------------Start Validation Date Time " + System.DateTime.Now.ToString() + "---------------");
+            btnGoC.Enabled = false;
+            colList();
             btnGoC.Enabled = true;
-            ojbLog.WriteLog("---------------End Validation Date Time " + System.DateTime.Now.ToString() + "---------------");
-            lblCol_messege.Text = "";
+             lblCol_messege.Text = "";
         }
         private void button1_Click(object sender, EventArgs e)    ///Collection upload controlll.......
         {
+            logfilename = "";
+            logfilename = System.DateTime.Now.ToString();
+            logfilename = logfilename.Replace(" ", "-");
+            logfilename = logfilename.Replace(":", "");
+            logfilename = logfilename.Replace("/", "-");
+            Coll_LogFile = @"Logs/Log- " + logfilename + ".txt";
+            lblCol_messege.Text = "Please wait .....";
+
             button1.Enabled = false;
             string strid = "";
             string SageACid_c = "";
@@ -1383,137 +1601,168 @@ namespace Loan_C
             Jbatch_c.Description ="CC-"+DateTime.Now.ToString("MM/dd/yyyy") ;
             SageACC_Dis_List = "";
             int totalpasscount = 0;
-            foreach (DataRow rw in tb_slot.Rows)
+            if (tb_slot.Rows.Count > 0)
             {
-                string BranchId_c = rw["branch_id"].ToString();
-                ojbLog.WriteLog("In Process Branch_ID=" + BranchId_c);
-                string fff = "branch_id='" + BranchId_c + "'";
-                DataRow[] rowsFilteredSorting = tbGRD_col.Tables[1].Select(fff);
-                Boolean Debit_Entry = false;
-                header_c = new ent_GLHeader();
-                TotalAmt_c = 0;
-                int delCount = 0;
-                string loanid_cl = "";
-                lstDet_c = new List<ent_GLDetail>();
-                decimal amt_c;
-                amt_c = 0;
-                string branchid_c ="";
-                string Vloanid_c = "";
-                string ClientName_c = "";
-                string ReceiptId_c = "";
-                
-                foreach (DataRow VDrw in rowsFilteredSorting)
+                foreach (DataRow rw in tb_slot.Rows)
                 {
-                    strid = VDrw["id"].ToString();
-                     branchid_c = VDrw["branch_id"].ToString();
-                     Vloanid_c = VDrw["loan_id"].ToString();
-                    ClientName_c = VDrw["ClientName"].ToString();
-                    sage_accid_c = VDrw["sage_acctid"].ToString();
-                    loanid_cl = VDrw["loan_id"].ToString();
-                    ojbLog.WriteLog("Cash collection for Loanid -" + loanid_cl);
-                    SageACid_c = VDrw["sageacct_branchcash"].ToString().Trim(); 
-                    ojbLog.WriteLog("validating sage_sageAccid id-" + SageACid_c);
-                    //if (sage_sageAccid == true)
-                    // {
-
-                    if (delCount == 0)
+                    string BranchId_c = rw["branch_id"].ToString();
+                    ojbLog.WriteLog(logfilename, "In Process Branch_ID=" + BranchId_c);
+                    string fff = "branch_id='" + BranchId_c + "'";
+                    DataRow[] rowsFilteredSorting = tbGRD_col.Tables[1].Select(fff);
+                    if (rowsFilteredSorting.Count() > 0)
                     {
-                        //Entering header details
-                        header_c.SourceType = "CC";
-                        header_c.Description ="CC-"+ VDrw["Received_Date"].ToString() + "-" + VDrw["branch_id"].ToString();
-                        header_c.JournalDetails = lstDet_c;
-                        lstHeader_c.Add(header_c);
+                        Boolean Debit_Entry = false;
+                        header_c = new ent_GLHeader();
+                        TotalAmt_c = 0;
+                        int delCount = 0;
+                        string loanid_cl = "";
+                        lstDet_c = new List<ent_GLDetail>();
+                        decimal amt_c;
+                        amt_c = 0;
+                        string branchid_c = "";
+                        string TransType_c = "";
+                        string ClientName_c = "";
+                        string ReceiptId_c = "";
+                        string sage_credit_gl = "";
+                        string sage_credit_gl_status = "TRUE";
+                        foreach (DataRow VDrw in rowsFilteredSorting)
+                        {                            
+                            strid = VDrw["id"].ToString();
+                            branchid_c = VDrw["branch_id"].ToString();
+                            TransType_c = VDrw["tYPE"].ToString();
+                            ClientName_c = VDrw["ClientName"].ToString();
+                            sage_accid_c = VDrw["sage_acctid"].ToString();  //gl AC of loanid
+                            sage_credit_gl = VDrw["sage_credit_gl"].ToString();  //credit gl account in case loan account is not credited
+
+                          //  MessageBox.Show(string.IsNullOrEmpty(sage_credit_gl).ToString() + sage_credit_gl);
+                            if (string.IsNullOrEmpty(sage_credit_gl) == false)
+                            {
+                                if (getaccountid_statusCol(sage_credit_gl) == false)
+                                {
+                                    ojbLog.WriteLog(logfilename, "Not Exist in Sage! sage_credit_gl -" + sage_credit_gl);
+                                    sage_credit_gl_status = "False";
+                                }
+                                else
+                                {
+                                    sage_credit_gl_status = "TRUE";
+                                    sage_accid_c = sage_credit_gl;
+                                    ojbLog.WriteLog(logfilename, "sage_credit_gl -" + sage_credit_gl);
+                                }
+
+                            }
+
+                            // ojbLog.WriteLog(logfilename,"validating sage_sageAccid id-" + SageACid_c);
+                            if (sage_credit_gl_status == "TRUE")
+                            {
+                                loanid_cl = VDrw["loan_id"].ToString();
+                                ojbLog.WriteLog(logfilename, "Cash collection for Loanid -" + loanid_cl);
+                                SageACid_c = VDrw["sageacct_branchcash"].ToString().Trim();
+                                if (delCount == 0)
+                                {
+                                    //Entering header details
+                                    header_c.SourceType = "CC";
+                                    header_c.Description = "CC-" + VDrw["Received_Date"].ToString() + "-" + VDrw["branch_id"].ToString();
+                                    header_c.JournalDetails = lstDet_c;
+                                    header_c.PostingDate = dateTimePicker3.Text + "T00:00:00Z";
+                                    header_c.DocumentDate = dateTimePicker3.Text + "T00:00:00Z"; 
+                                    lstHeader_c.Add(header_c);
+                                }
+                                delCount++;
+
+                                ojbLog.WriteLog(logfilename, "json created for loan account -" + sage_accid_c);
+                                amt_c = Convert.ToDecimal(VDrw["Received_Amt"].ToString());
+                                detail_c = new ent_GLDetail();
+                                detail_c.SourceType = "CC";   // Detail source type T1 for crediting Tax liability IGST account
+                                detail_c.Reference = VDrw["id"].ToString() + "-" + loanid_cl;
+                                // detail.TaxAuthority = "07IGN";
+                                detail_c.Description = TransType_c;//VDrw["ClientName"].ToString();
+                                detail_c.AccountNumber = sage_accid_c.Trim();
+                                detail_c.Amount = amt_c * -1;
+                               // detail_c.DateCreated= dateTimePicker3.Text + "T00:00:00Z";
+                                //Receiptid
+                                TotalAmt_c = TotalAmt_c + amt_c;
+                                lstDet_c.Add(detail_c);
+                                Debit_Entry = true;
+                                string ss = "'" + strid + "'";
+                                SageACC_Dis_List = ss + "," + SageACC_Dis_List;
+                                //ReceiptId_c = VDrw["Receiptid"].ToString() +"-"+ReceiptId_c;
+                                totalpasscount++;
+                                //}
+                                // else
+                                // {
+                                // ojbLog.WriteLog(logfilename,"Sage  account does not exist in loan master or in sage" + sage_sageAccid);                        
+                            }
+                        }//End foreach
+
+                        if (Debit_Entry == true)
+                        {
+
+                            detail_c = new ent_GLDetail();
+                            detail_c.SourceType = "CC";   // Detail source type T1 for crediting Tax liability IGST account
+                            detail_c.Reference = strid;
+                            // detail.TaxAuthority = "07IGN";
+                            detail_c.Description = "Cash Collection";
+                            detail_c.AccountNumber = SageACid_c.Trim();
+                            detail_c.Amount = TotalAmt_c;
+                          //  detail_c.DateCreated = dateTimePicker3.Text + "T00:00:00Z";
+                            lstDet_c.Add(detail_c);
+                        }
+                        //GLBatchEntry_c(SageACid_c);
+                        Jbatch_c.JournalHeaders = lstHeader_c;
                     }
-                    delCount++;
-
-                    ojbLog.WriteLog("json created for loan account -" + sage_accid_c);
-                    amt_c = Convert.ToDecimal(VDrw["Received_Amt"].ToString());
-                    detail_c = new ent_GLDetail();
-                    detail_c.SourceType = "CC";   // Detail source type T1 for crediting Tax liability IGST account
-                    detail_c.Reference = VDrw["loan_id"].ToString()+"-"+ VDrw["Receiptid"].ToString();
-                    // detail.TaxAuthority = "07IGN";
-                    detail_c.Description = VDrw["ClientName"].ToString();
-                    detail_c.AccountNumber = sage_accid_c.Trim();
-                    detail_c.Amount = amt_c * -1;
-                    // detail_c.OrigDescription= VDrw["Receiptid"].ToString();
-                    //Receiptid
-                    TotalAmt_c = TotalAmt_c + amt_c;
-                    lstDet_c.Add(detail_c);
-                    Debit_Entry = true;
-                    string ss = "'" + strid + "'";
-                    SageACC_Dis_List = ss + "," + SageACC_Dis_List;
-                    //ReceiptId_c = VDrw["Receiptid"].ToString() +"-"+ReceiptId_c;
-                    totalpasscount++;
-                    //}
-                    // else
-                    // {
-                    // ojbLog.WriteLog("Sage  account does not exist in loan master or in sage" + sage_sageAccid);                        
-                    //}
                 }
+                lblfilter_c.Text = Convert.ToString(totalpasscount);
+                #endregion
 
-                if (Debit_Entry == true)
+                ojbLog.WriteLog(logfilename, "---------------Start API Date Time " + System.DateTime.Now.ToString() + "---------------");
+                lblCol_messege.Text = "Waiting for API response....";
+                dynamic newCustomer = POSTData(Jbatch_c, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/GL/GLJournalBatches");
+                if (newCustomer == "ERROR" || newCustomer == "conflic" || newCustomer == "Bad Request")
                 {
-
-                    detail_c = new ent_GLDetail();
-                    detail_c.SourceType = "CC";   // Detail source type T1 for crediting Tax liability IGST account
-                    detail_c.Reference = Vloanid_c+"-"+ReceiptId_c;
-                    // detail.TaxAuthority = "07IGN";
-                    detail_c.Description = ClientName_c;
-                    detail_c.AccountNumber = SageACid_c.Trim();
-                    detail_c.Amount = TotalAmt_c;
-                    //detail_c.OrigDescription = ReceiptId_c;
-                    lstDet_c.Add(detail_c);
+                    MessageBox.Show("GL Entry creation API Response failed.... " + newCustomer);
                 }
-                //GLBatchEntry_c(SageACid_c);
-                Jbatch_c.JournalHeaders = lstHeader_c;
-            }
-            lblfilter_c.Text = Convert.ToString(totalpasscount);
-            #endregion
-
-            ojbLog.WriteLog("---------------Start API Date Time " + System.DateTime.Now.ToString() + "---------------");
-            lblCol_messege.Text = "Waiting for API response....";
-            dynamic newCustomer = POSTData(Jbatch_c, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/GL/GLJournalBatches");
-            if (newCustomer == "ERROR" || newCustomer == "conflic" || newCustomer == "Bad Request")
-            {
-                MessageBox.Show("GL Entry creation failed.... " + newCustomer);
-            }
-            else
-            {
-                dynamic deserialized = JsonConvert.DeserializeObject(newCustomer.ToString());
-                try
+                else
                 {
-                    var rESPONSE = deserialized["JournalHeaders"];
-                    dynamic des = JsonConvert.DeserializeObject(rESPONSE.ToString());
-                    str_batchno = des[0].BatchNumber.ToString();
-                    lblCol_messege.Text = "Batch Number:"+ str_batchno;
-                    string EntryNumber = des[0].EntryNumber.ToString();
-                    ojbLog.WriteLog("GL Entry creation successfull....GLBatchNumbr=" + str_batchno);
-                    ojbLog.WriteLog("GLBatchEntry Updating......" + SageACC_Dis_List);
-                    SageACC_Dis_List = SageACC_Dis_List.Remove(SageACC_Dis_List.Length - 1);
-                    //string strupList = update_JList[s].ToString();
-                    UpdateCollMaster(str_batchno, SageACC_Dis_List);
-                    MessageBox.Show("GL Entry creation successful....GLBatchNumbr = " + str_batchno);
-                    ojbLog.WriteLog("GLBatch Entry No updated in disbursement header...GLBatchNumbr=" + str_batchno);
+                    dynamic deserialized = JsonConvert.DeserializeObject(newCustomer.ToString());
+                    try
+                    {
+                        var rESPONSE = deserialized["JournalHeaders"];
+                        dynamic des = JsonConvert.DeserializeObject(rESPONSE.ToString());
+                        str_batchno = des[0].BatchNumber.ToString();
+                        lblCol_messege.Text = "Batch Number:" + str_batchno;
+                        string EntryNumber = des[0].EntryNumber.ToString();
+                        ojbLog.WriteLog(logfilename, "GL Entry creation successfull....GLBatchNumbr=" + str_batchno);
+                        ojbLog.WriteLog(logfilename, "GLBatchEntry Updating......" + SageACC_Dis_List);
+                        SageACC_Dis_List = SageACC_Dis_List.Remove(SageACC_Dis_List.Length - 1);
+                        //string strupList = update_JList[s].ToString();
+                        UpdateCollMaster(str_batchno, SageACC_Dis_List);
+                        MessageBox.Show("GL Entry creation successful....GLBatchNumbr = " + str_batchno);
+                        ojbLog.WriteLog(logfilename, "GLBatch Entry No updated in disbursement header...GLBatchNumbr=" + str_batchno);
 
-                }
-                catch (Exception Err)
-                {
-                    MessageBox.Show(deserialized);
-                    ojbLog.WriteLog("GLBatchEntry function failed......" + Err.Message.ToString());
+
+
+                    }
+                    catch (Exception Err)
+                    {
+                        MessageBox.Show(deserialized);
+                        ojbLog.WriteLog(logfilename, "GLBatchEntry function failed......" + Err.Message.ToString());
+                    }
                 }
             }
+            ojbLog.WriteLog(logfilename,"---------------End API Date Time " + System.DateTime.Now.ToString() + "---------------");
 
-            ojbLog.WriteLog("---------------End API Date Time " + System.DateTime.Now.ToString() + "---------------");
-
+            ojbLog.WriteLog(logfilename, "---------------End  Date Time " + System.DateTime.Now.ToString() + "---------------");
+            colList();
             button1.Enabled = true;
             lblCol_messege.Text = "";
         }
+
         public Boolean UpdateCollMaster(string batchEntryNo, string sageDisAccid)
         {
             Boolean retrnBatchEntryNo = false;
             try
             {
-                // ojbLog.WriteLog("UpdateLoanMaster  Loan Id List" + sageDisAccid);
+                // ojbLog.WriteLog(logfilename,"UpdateLoanMaster  Loan Id List" + sageDisAccid);
                 System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter();
                 System.Data.SqlClient.SqlConnection connR;
                 System.Data.SqlClient.SqlCommand cmdR;
@@ -1524,7 +1773,7 @@ namespace Loan_C
                 cmdR.CommandTimeout = 180;
                 cmdR.CommandType = CommandType.Text;
                 int res = cmdR.ExecuteNonQuery();
-                ojbLog.WriteLog("Update loan master Status:" + res);
+                ojbLog.WriteLog(logfilename,"Update loan master Status:" + res);
                 if (res >= 1)
                     retrnBatchEntryNo = true;
                 if (connR.State == System.Data.ConnectionState.Open)
@@ -1532,16 +1781,61 @@ namespace Loan_C
             }
             catch (Exception Err)
             {
-                ojbLog.WriteLog("UpdateLoanMaster function failed......" + Err.Message.ToString());
+                ojbLog.WriteLog(logfilename,"UpdateLoanMaster function failed......" + Err.Message.ToString());
             }
             return retrnBatchEntryNo;
         }
+
+        public Boolean getaccountid_statusCol(string sageAC_gl)
+        {
+            Boolean returnvalue = false;
+            try
+            {
+                System.Data.SqlClient.SqlConnection connR;
+                System.Data.SqlClient.SqlCommand cmdR;
+                String sQueryDeff;
+                DataTable dtCheckamt;
+                sQueryDeff = "";
+                dtCheckamt = new DataTable();
+                sQueryDeff = "Select * from [" + SAGEDB + "].dbo.GLAMF where ACCTFMTTD = '" + sageAC_gl.Trim() + "'";
+                System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter();
+                connR = new System.Data.SqlClient.SqlConnection(connectionstring);
+                connR.Open();
+                cmdR = new System.Data.SqlClient.SqlCommand(sQueryDeff, connR);
+                cmdR.CommandTimeout = 180;
+                cmdR.CommandType = CommandType.Text;
+                sda.SelectCommand = cmdR;
+                sda.Fill(dtCheckamt);
+                if (dtCheckamt.Rows.Count > 0)
+                {
+                    returnvalue = true;
+                    ojbLog.WriteLog(logfilename, "GL Credit Account exist in Sage.....");
+                }
+                else
+                 ojbLog.WriteLog(logfilename, "GL Credit Account not exist in Sage.....");
+
+            }
+            catch (Exception ex)
+            {
+                returnvalue = false;
+                ojbLog.WriteLog(logfilename, "Getaccountid_status_col function failed..." + ex.Message);
+            }
+            return returnvalue;
+        }
+
+
         #endregion
 
-        #region Deposit--------------------------------------
+        #region Branch cash Deposit in bank--------------------------------------
         private void btnDeposit_Click(object sender, EventArgs e)
         {
-            ojbLog.WriteLog("---------------Start Deposit Date Time " + System.DateTime.Now.ToString() + "---------------");
+            ojbLog.WriteLog(logfilename,"---------------Start Deposit Date Time " + System.DateTime.Now.ToString() + "---------------");
+            dipositList();
+            ojbLog.WriteLog(logfilename,"---------------End Deposit Date Time " + System.DateTime.Now.ToString() + "---------------");
+            lblDep_messege.Text = "";
+        }
+        public void dipositList()
+        {
             #region  New Code     
             lblDep_messege.Text = "Please wait .......";
 
@@ -1588,25 +1882,83 @@ namespace Loan_C
 
 
             #endregion
-            ojbLog.WriteLog("---------------End Deposit Date Time " + System.DateTime.Now.ToString() + "---------------");
-            lblDep_messege.Text = "";
         }
+
+        public void dipositErrorList()
+        {
+            #region  New Code     
+            lblDep_messege.Text = "Please wait .......";
+
+            DataTable dtnew = new DataTable();
+            System.Data.SqlClient.SqlConnection conn;
+            System.Data.SqlClient.SqlCommand cmd;
+            conn = new System.Data.SqlClient.SqlConnection(connectionstring);
+            conn.Open();
+            string Querystring = " select id ,RTRIM(ds.sageacct_branchcash) as sageacct_branchcash,RTRIM(ds.sageid_bank) as sageid_bank,RTRIM(ds.Bank_name) as Bank_name,RTRIM(ds.Amount) as Amount,RTRIM(ds.DepositDate) as DepositDate,RTRIM(ds.branch_id) as branch_id,RTRIM(ds.sageid_branchcash) as sageid_branchcash ,RTRIM(ds.sageacct_bank) as sageacct_bank ,RTRIM(ds.branchName) as  branchName from  " + THSERVERDEP + "   ds  " +
+                               " where ds.BKEntry_no is null and ds.depositDate='" + dtp_deposit.Text + "' ";
+
+            cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
+            cmd.CommandTimeout = 180;
+            cmd.CommandType = CommandType.Text;
+            cmd.ExecuteNonQuery();
+            using (System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter())
+            {
+                var objerrList = (IDictionary<string, object>)person;
+                cmd.Connection = conn;
+                sda.SelectCommand = cmd;
+                using (tbGRD_deposit = new DataTable())
+                {
+                    sda.Fill(tbGRD_deposit);
+                    if (tbGRD_deposit.Rows.Count > 0)
+                    {
+                        lblDepTotal.Text = Convert.ToString(tbGRD_deposit.Rows.Count);
+                        //lblTotalrowcount.Text = tbGRD.Rows.Count.ToString();
+                        //lblslotcount.Text = slotSize.ToString();
+                        // dgw_deposit.AutoGenerateColumns = false;
+                        dgw_deposit.DataSource = tbGRD_deposit;
+                        dgw_deposit.EnableHeadersVisualStyles = false;
+                        dgw_deposit.ColumnHeadersDefaultCellStyle.BackColor = Color.Gray;
+                        dgw_deposit.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+                        // dgw_deposit.ColumnHeadersHeight = 50;
+                        dgw_deposit.Columns[1].DefaultCellStyle.BackColor = Color.Red;
+                        dgw_deposit.Columns[2].DefaultCellStyle.BackColor = Color.Red;
+                        dgw_deposit.Columns[8].DefaultCellStyle.BackColor = Color.Red;
+                        dgw_deposit.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.EnableResizing;
+                        dgw_deposit.ColumnHeadersHeight = 30;
+                        dgw_deposit.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+                        dgw_deposit.ColumnHeadersDefaultCellStyle.Font = new Font("Tahoma", 9.75F, FontStyle.Bold);
+                    }
+                    else { MessageBox.Show("Data not found!"); }
+                }
+            }
+
+
+            #endregion
+        }
+
         private void btnUploaddeposit_Click(object sender, EventArgs e)
         {
-            ojbLog.WriteLog("---------------Start Deposit API Process Date Time " + System.DateTime.Now.ToString() + "---------------");
+            logfilename = "";
+            logfilename = System.DateTime.Now.ToString();
+            logfilename = logfilename.Replace(" ", "-");
+            logfilename = logfilename.Replace(":", "");
+            logfilename = logfilename.Replace("/", "-");
+            ColDiposit_LogFile = @"Logs/Log- " + logfilename + ".txt";
+            ojbLog.WriteLog(logfilename,"---------------Start Deposit API Process Date Time " + System.DateTime.Now.ToString() + "---------------");
             lblDep_messege.Text = "Please wait .......";
             SageACC_Dis_List = "";
             DataView view = new DataView(tbGRD_deposit);
             DataTable tb_distinctValues = view.ToTable(true, "sageid_bank"); //grouping with sageid_bank
-            ojbLog.WriteLog(tbGRD_deposit.Rows.Count.ToString());
+            ojbLog.WriteLog(logfilename,tbGRD_deposit.Rows.Count.ToString());
             string successResult = "";
+            int totSucCount = 0;
             foreach (DataRow rw in tb_distinctValues.Rows)
             {
                
                 string sageacct_branchcash_list = "";
                 string sageid_bank = rw["sageid_bank"].ToString();
 
-                ojbLog.WriteLog("In Process Account number=" + sageid_bank);
+                ojbLog.WriteLog(logfilename,"In Process Account number=" + sageid_bank);
                 string BankCode = "sageid_bank='" + sageid_bank + "'";
                 DataRow[] rowsFilteredSorting = tbGRD_deposit.Select(BankCode);
 
@@ -1620,19 +1972,21 @@ namespace Loan_C
                 //obj.Add("BankEntryType", "Deposits");
                 //obj.Add("EntryDescription", rw["Received_Date"].ToString() + "-BCHID-" + sageid_bank);
                 string strBK_entry = "";
+                dynamic BK = new ExpandoObject();
+                var obj = (IDictionary<string, object>)BK;
                 foreach (DataRow BKrw in rowsFilteredSorting)
                 {
-                    dynamic BK = new ExpandoObject();
-                    var obj = (IDictionary<string, object>)BK;
-                   // if (lineNumberH==1)
-                   // {
+                    totSucCount++;
+                    ojbLog.WriteLog(logfilename, "Row Number-"+ totSucCount);
+                    if (lineNumberH==1)
+                    {
                         obj.Add("BankCode", sageid_bank);
-                        obj.Add("BankEntryDate", dateTimePicker2.Text+ "T00:00:00Z");
-                        obj.Add("DateCreated", dateTimePicker2.Text + "T00:00:00Z");
+                        obj.Add("BankEntryDate", dtp_deposit.Text+ "T00:00:00Z");
+                        obj.Add("DateCreated", dtp_deposit.Text + "T00:00:00Z");
                         obj.Add("BankEntryType", "Deposits");
                         obj.Add("EntryDescription", "CD-"+BKrw["DepositDate"].ToString() + "-" + BKrw["branch_id"].ToString());
                        
-                  //  }
+                    }
                     lineNumberH++;
                     bk = new ent_BKdetln();
                     bk.LineNumber = lineNumber * -1;
@@ -1645,8 +1999,9 @@ namespace Loan_C
                    // lineNumber = lineNumber + 1;
                     string ss = "'" + BKrw["id"].ToString().Trim() + "'";
                     sageacct_branchcash_list = ss + "," + sageacct_branchcash_list;
-                    obj.Add("BankEntryDetail", objBn);
-                
+                    
+                }
+                obj.Add("BankEntryDetail", objBn);
                 dynamic newCustomer = POSTData(obj, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/BK/BKBankEntries");
                 dynamic deserialized = JsonConvert.DeserializeObject(newCustomer.ToString());
                 try
@@ -1654,42 +2009,54 @@ namespace Loan_C
                     BankEntryNumber = deserialized.BankEntryNumber;
                     lblDep_messege.Text = "Proccess BankEntryNumber="+ BankEntryNumber;
                     UpdateDepositMaster(BankEntryNumber, sageid_bank, sageacct_branchcash_list);
-                    ojbLog.WriteLog("Bank entry created-Entry No......." + BankEntryNumber);
+                    ojbLog.WriteLog(logfilename,"Bank entry created-Entry No......." + BankEntryNumber);
                     string sss = " BankEntry Number: " + BankEntryNumber + "  Line Number: " + lineNumber ;
 
-                        strBK_entry = sss + Environment.NewLine + strBK_entry;
-                        
+                    strBK_entry = sss;//sss + Environment.NewLine + strBK_entry;
+
+
                 }
                 catch (Exception)
                 {
-                    ojbLog.WriteLog("Bank Method, Some thing wrong......." + deserialized);
+                    ojbLog.WriteLog(logfilename,"Bank Method, Some thing wrong......." + deserialized);
                 }
-                }
-                successResult = strBK_entry + Environment.NewLine + successResult;
+                
+                successResult = strBK_entry + Environment.NewLine + "Total Success Count-"+ totSucCount;
             }
             lblDep_messege.Text = "";
-            MessageBox.Show(successResult, "Successfully Inserted Bank Entry!!!");
-            ojbLog.WriteLog("---------------End Deposit API Process Date Time " + System.DateTime.Now.ToString() + "---------------");
+            if(successResult=="")
+            MessageBox.Show("Validated Data not found. ", "Error Details..!!!");
+            else
+                MessageBox.Show(successResult, "Successfully Inserted Bank Entry!!!");
+            dipositErrorList();
+            lblDep_messege.Text = "";
+            ojbLog.WriteLog(logfilename,"---------------End Deposit API Process Date Time " + System.DateTime.Now.ToString() + "---------------");
         }
+
+        private void button2_Click(object sender, EventArgs e)  //without validated list
+        {
+            colListError();
+        }
+
         public Boolean UpdateDepositMaster(string bankEntryNo, string sageid_bank, string sageacct_branchcash_List)
         {
             Boolean retrnBatchEntryNo = false;
             try
             {
                 sageacct_branchcash_List = sageacct_branchcash_List.Remove(sageacct_branchcash_List.Length - 1);
-                ojbLog.WriteLog("UpdateLoanMaster  Loan Id List" + hdSeqNo);
+                ojbLog.WriteLog(logfilename,"UpdateLoanMaster  Loan Id List" + hdSeqNo);
                 System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter();
                 System.Data.SqlClient.SqlConnection connR;
                 System.Data.SqlClient.SqlCommand cmdR;
                 connR = new System.Data.SqlClient.SqlConnection(connectionstring);
                 connR.Open();
-                ojbLog.WriteLog("sageacct_branchcash_List-:" + sageacct_branchcash_List);
+                ojbLog.WriteLog(logfilename,"sageacct_branchcash_List-:" + sageacct_branchcash_List);
                 string Querystring1 = " update " + THSERVERDEP + " set BKEntry_no='" + bankEntryNo + "'   where  id in (" + sageacct_branchcash_List + ") and  Convert(date,DepositDate,100) ='" + dtp_deposit.Text + "' and  sageid_bank ='" + sageid_bank + "'";
                 cmdR = new System.Data.SqlClient.SqlCommand(Querystring1, connR);
                 cmdR.CommandTimeout = 180;
                 cmdR.CommandType = CommandType.Text;
                 int res = cmdR.ExecuteNonQuery();
-                ojbLog.WriteLog("Update loan master Status:" + res);
+                ojbLog.WriteLog(logfilename,"Update loan master Status:" + res);
                 if (res >= 1)
                     retrnBatchEntryNo = true;
                 if (connR.State == System.Data.ConnectionState.Open)
@@ -1697,7 +2064,7 @@ namespace Loan_C
             }
             catch (Exception Err)
             {
-                ojbLog.WriteLog("UpdateLoanMaster function failed......" + Err.Message.ToString());
+                ojbLog.WriteLog(logfilename,"UpdateLoanMaster function failed......" + Err.Message.ToString());
             }
             return retrnBatchEntryNo;
         }
@@ -1792,6 +2159,34 @@ namespace Loan_C
                 //THSERVERCOLL = "LNDSDB.dbo.disbursement_details";
             }
         }
+
+        private void btnlogview_Click(object sender, EventArgs e)
+        {
+            string path = System.IO.Path.GetFullPath(Disb_LogFile);
+            if (System.IO.File.Exists(path)==true)
+            System.Diagnostics.Process.Start(path);
+           
+        }
+
+        private void btnDepositLogview_Click(object sender, EventArgs e)
+        {
+            string path = System.IO.Path.GetFullPath(ColDiposit_LogFile);
+            if (System.IO.File.Exists(path) == true)
+                System.Diagnostics.Process.Start(path);
+        }
+
+        private void btnCollLogView_Click(object sender, EventArgs e)
+        {
+            string path = System.IO.Path.GetFullPath(Coll_LogFile);
+            if (System.IO.File.Exists(path) == true)
+                System.Diagnostics.Process.Start(path);
+        }
+
+        private void label4_Click(object sender, EventArgs e)
+        {
+
+        }
+
         public object POSTData(object json, string url)
         {
             object returnValue = null;
@@ -1799,7 +2194,7 @@ namespace Loan_C
             {
                 using (var content = new StringContent(JsonConvert.SerializeObject(json), System.Text.Encoding.UTF8, "application/json"))
                 {
-                   // ojbLog.WriteLog(JsonConvert.SerializeObject(json));
+                  ojbLog.WriteLog(logfilename,JsonConvert.SerializeObject(json));
                     using (var httpClientHandler = new HttpClientHandler { Credentials = new NetworkCredential(USERNAME, PASSWORD) })
 
                     using (var _httpClient = new HttpClient(httpClientHandler))
@@ -1808,1037 +2203,29 @@ namespace Loan_C
                         HttpResponseMessage result = _httpClient.PostAsync(url, content).Result;
                         if (result.StatusCode == System.Net.HttpStatusCode.OK || result.StatusCode == System.Net.HttpStatusCode.Created)
                         {
-                           // ojbLog.WriteLog(result.ToString());
+                           // ojbLog.WriteLog(logfilename,result.ToString());
                             returnValue = result.Content.ReadAsStringAsync().Result;
                             dynamic deserialized = JsonConvert.DeserializeObject(returnValue.ToString());
                         }
                         else if (result.StatusCode == System.Net.HttpStatusCode.Conflict)
                         {
                             returnValue = "Conflict";
-                            ojbLog.WriteLog(result.ToString()); ;
+                            ojbLog.WriteLog(logfilename,result.ToString()); ;
                         }
                         else
                         {
                             returnValue = "ERROR";
-                            ojbLog.WriteLog(result.ToString());
+                            ojbLog.WriteLog(logfilename,result.ToString());
                         }
                     }
                 }
             }
             catch (Exception ex)
-            { ojbLog.WriteLog("POSTData  Date" + System.DateTime.Now.ToString("MM-dd-yyyy") + ex.Message); }
+            { ojbLog.WriteLog(logfilename,"POSTData  Date" + System.DateTime.Now.ToString("MM-dd-yyyy") + ex.Message); }
             return returnValue;
         }
         #endregion
 
-        #region Not Uses methods
-
-        public void grdList()
-        {
-            DataTable lndisbrh_tbl;
-
-            System.Data.SqlClient.SqlConnection conn;
-            System.Data.SqlClient.SqlCommand cmd;
-            conn = new System.Data.SqlClient.SqlConnection(connectionstring);
-            conn.Open();
-            string Querystring = "SELECT * FROM [LMSSERVER].MICROFINANCE.dbo.rtgs_disbursement_master h where Convert(date,h.disbdate,100) between '" + dateTimePicker2.Text + "' AND '" + dateTimePicker2.Text + "'";
-            cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
-            cmd.CommandTimeout = 180;
-            cmd.CommandType = CommandType.Text;
-            cmd.ExecuteNonQuery();
-            using (System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter())
-            {
-                var objerrList = (IDictionary<string, object>)person;
-                cmd.Connection = conn;
-                sda.SelectCommand = cmd;
-                using (lndisbrh_tbl = new DataTable())
-                {
-                    sda.Fill(lndisbrh_tbl);
-                    if (lndisbrh_tbl.Rows.Count > 0)
-                    {
-                        dgv_LNDISBH.DataSource = lndisbrh_tbl;
-                        dgv_LNDISBH.AutoGenerateColumns = false;
-                    }
-                }
-            }
-        }
-        private void btnLog_Click(object sender, EventArgs e)
-        {
-            //// const string sPath = "save.txt";
-            //var saveFile = new SaveFileDialog();
-            //saveFile.Filter = "Text (*.txt)|*.txt";
-            //if (saveFile.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            //{
-            //    System.IO.StreamWriter SaveFile = new System.IO.StreamWriter(saveFile.FileName);
-            //    for (int i = 0; i < listBox1.Items.Count; i++)
-            //        SaveFile.WriteLine(listBox1.Items[i]);
-            //    SaveFile.ToString();
-            //    SaveFile.Close();
-            //}
-        }
-        public Boolean CheckExistSage(String SageAccId)
-        {
-            Boolean tbReturnMaster;
-            try
-            {
-                tbReturnMaster = false;
-                System.Data.SqlClient.SqlConnection connR;
-                System.Data.SqlClient.SqlCommand cmdR;
-                String sQueryDeff;
-                DataTable dtCheckamt;
-                sQueryDeff = "";
-                dtCheckamt = new DataTable();
-                sQueryDeff = "Select * from [" + SAGEDB + "].dbo.GLAMF where ACCTFMTTD ='" + SageAccId.Trim() + "'";
-                System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter();
-                connR = new System.Data.SqlClient.SqlConnection(connectionstring);
-                connR.Open();
-                cmdR = new System.Data.SqlClient.SqlCommand(sQueryDeff, connR);
-                cmdR.CommandTimeout = 180;
-                cmdR.CommandType = CommandType.Text;
-                sda.SelectCommand = cmdR;
-                sda.Fill(dtCheckamt);
-                if (dtCheckamt.Rows.Count > 0)
-                {
-                    tbReturnMaster = true;
-                }
-                else { tbReturnMaster = false; }
-            }
-            catch (Exception ex)
-            {
-                ojbLog.WriteLog("CheckExistSage   " + ex.Message);
-                tbReturnMaster = false;
-            }
-            return tbReturnMaster;
-        }
-        public Boolean CheckExist_MSTR_SG(String cl_loanid)
-        {
-            Boolean tbReturnMaster;
-            try
-            {
-                tbReturnMaster = false;
-                System.Data.SqlClient.SqlConnection connR;
-                System.Data.SqlClient.SqlCommand cmdR;
-                String sQueryDeff;
-                DataTable dtCheckamt;
-                sQueryDeff = "";
-                dtCheckamt = new DataTable();
-                //sQueryDeff = "Select a.sage_acctid from CTLOAN.dbo.LNMSTR a  where a.sage_acctid='" + SageAccId.Trim() + "'";
-                sQueryDeff = " Select sage_acctid from [CTLOAN].dbo.LNMSTR l inner join " + SAGEDB + ".dbo.GLAMF s on l.sage_acctid = s.ACCTFMTTD  where l.loan_id = '" + cl_loanid.Trim() + "'";
-                System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter();
-                connR = new System.Data.SqlClient.SqlConnection(connectionstring);
-                connR.Open();
-                cmdR = new System.Data.SqlClient.SqlCommand(sQueryDeff, connR);
-                cmdR.CommandTimeout = 180;
-                cmdR.CommandType = CommandType.Text;
-                sda.SelectCommand = cmdR;
-                sda.Fill(dtCheckamt);
-                if (dtCheckamt.Rows.Count > 0)
-                {
-                    sage_accid_c = dtCheckamt.Rows[0][0].ToString();
-                    tbReturnMaster = true;
-                }
-                else { tbReturnMaster = false; }
-            }
-            catch (Exception)
-            {
-                tbReturnMaster = false;
-            }
-            return tbReturnMaster;
-        }
-        public Boolean loandisdetails_oldloan(string strhdseqNo)
-        {
-            Boolean loandisdetails_oldloan = true;
-            DataTable dtlnDetail;
-            try
-            {
-                oldacct = new Dictionary<string, string>();
-                ojbLog.WriteLog("Checking old loan accounts in detail line.......");
-                System.Data.SqlClient.SqlConnection conn;
-                System.Data.SqlClient.SqlCommand cmd;
-
-                conn = new System.Data.SqlClient.SqlConnection(connectionstring);
-                conn.Open();
-                //string Querystring = "Select RTRIM(a.oldloan_accountid), RTRIM(b.sage_acctid) mstr, RTRIM(c.ACCTFMTTD) sage, RTRIM(CAST(a.detail_line as CHAR)) from [[LMSSERVER].MICROFINANCE.dbo.rtgs_disbursement_details a  " +
-                //"left join [CTLOAN].dbo.LNMSTR b on  a.oldloan_accountid= CAST(b.loan_id as int) left join [" + dbnameSage + "].dbo.GLAMF c on b.sage_acctid=c.ACCTFMTTD  " +
-                //"where a.trans_type IN (120,121) and a.trans_amt<>0 and a.hdseq_no =" + hdSeqNo;
-                string Querystring = "Select RTRIM(a.oldloanid) oldloanid, RTRIM(b.sage_acctid) mstr, RTRIM(c.ACCTFMTTD) sage, RTRIM(CAST(a.ID as CHAR)) " +
-                " from " + THSERVERDETS + " a left join[CTLOAN].dbo.LNMSTR b on a.oldloanid = CAST(b.loan_id as int) " +
-                " left join [" + SAGEDB + "].dbo.GLAMF c on b.sage_acctid = c.ACCTFMTTD " +
-                " where a.amount <> 0 and a.LOANID =" + hdSeqNo;
-                cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
-                cmd.CommandTimeout = 180;
-                cmd.CommandType = CommandType.Text;
-                cmd.ExecuteNonQuery();
-                using (System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter())
-                {
-                    var objerrList = (IDictionary<string, object>)person;
-                    cmd.Connection = conn;
-                    sda.SelectCommand = cmd;
-                    using (dtlnDetail = new DataTable())
-                    {
-                        sda.Fill(dtlnDetail);
-                        if (dtlnDetail.Rows.Count > 0)
-                        {
-                            foreach (DataRow row in dtlnDetail.Rows)
-                            {
-                                if (string.IsNullOrEmpty(row["mstr"].ToString())) //' error  - account id must exist in LNMSTR table
-                                {
-                                    loandisdetails_oldloan = false;
-                                    ojbLog.WriteLog("Account does not exist in Loan Master(loanid)....");
-                                }  //Account does not exist in Loan Master(loanid)....
-                                if (string.IsNullOrEmpty(row["sage"].ToString()))  //'error  - account id must exist in Sage table
-                                {
-                                    loandisdetails_oldloan = false;
-                                    ojbLog.WriteLog("Account does not exist in Sage....");
-                                }  // Account does not exist in Sage....
-                                if (loandisdetails_oldloan == true)
-                                {
-                                    oldacct.Add(row[3].ToString(), row[2].ToString());
-                                    // oldacct.Add RTrim(rs1.Fields.Item(2)), Key:= rs1.Fields.Item(3)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception Err)
-            {
-                ojbLog.WriteLog("loandisdetails_oldloan function failed......" + Err.Message.ToString());
-            }
-            return loandisdetails_oldloan;
-        }
-        public Boolean GLBatchEntry(String hdSeqNo)
-        {
-            Boolean taxType_entry;
-            Double taxbase;
-            Double igstamt;
-            Double cgstamt;
-            Double sgstamt;
-            string taxgroupcode;
-            string taxliabilityaccount = "";
-            dynamic GL = new ExpandoObject();
-            var obj = (IDictionary<string, object>)GL;
-            Boolean rntGLBatchEntry;
-            string dloanid = "";
-            string sageloanacct;
-            DataTable dtgjbatch;
-            rntGLBatchEntry = false;
-            ent_GLHeader header = new ent_GLHeader();
-            ent_GLDetail detail;
-            ent_GLJBtch Jbatch = new ent_GLJBtch();
-            List<ent_GLDetail> lstDet = new List<ent_GLDetail>();
-            List<ent_GLHeader> lstHeader = new List<ent_GLHeader>();
-            try
-            {
-                ojbLog.WriteLog("GLBatchEntry Inserting..........");
-                System.Data.SqlClient.SqlConnection conn;
-                System.Data.SqlClient.SqlCommand cmd;
-                conn = new System.Data.SqlClient.SqlConnection(connectionstring);
-                conn.Open();
-
-                // Qry to check it is tax type entry or not
-                string Querystring = " Select(sum(ISNULL(AMOUNT, 0)) * -1),SUM(CONVERT(DECIMAL, igst_amt)),SUM(CONVERT(DECIMAL, cgst_amt)),SUM(CONVERT(DECIMAL, sgst_amt))" +
-                   "  from " + THSERVERDETS + " " +
-                     " where LOANID = " + hdSeqNo + "  and(ISNULL(igst_amt, 0) <> 0 or ISNULL(cgst_amt, 0) <> 0)";
-                cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
-                cmd.CommandTimeout = 180;
-                cmd.CommandType = CommandType.Text;
-                cmd.ExecuteNonQuery();
-                using (System.Data.SqlClient.SqlDataAdapter glsda = new System.Data.SqlClient.SqlDataAdapter())
-                {
-                    var objerrList = (IDictionary<string, object>)person;
-                    cmd.Connection = conn;
-                    glsda.SelectCommand = cmd;
-                    using (dtgjbatch = new DataTable())
-                    {
-                        glsda.Fill(dtgjbatch);
-                        if (dtgjbatch.Rows.Count > 0)  // if it is tax tupe entry count will be more than 0
-                        {
-                            taxType_entry = true;
-                            taxbase = Convert.ToDouble(dtgjbatch.Rows[0][0]);
-                            igstamt = Convert.ToDouble(dtgjbatch.Rows[0][1]);
-                            cgstamt = Convert.ToDouble(dtgjbatch.Rows[0][2]);
-                            sgstamt = Convert.ToDouble(dtgjbatch.Rows[0][3]);
-                        }
-                        else
-                        {
-                            taxType_entry = false;
-                            taxbase = 0;
-                            igstamt = 0;
-                            cgstamt = 0;
-                            sgstamt = 0;
-                        }
-                        // to determine igst or cgst depending on the state codes and deriving tax group
-                        if (strS_var == "DEFF")
-                            taxgroupcode = gstStateCode + "IGN";
-                        else
-                            taxgroupcode = gstStateCode + "CGN";
-
-                        DataSet tblibr;
-                        //string Querystring1 = " Select LIABILITY from [" + dbnameSage + "].[dbo].TXAUTH where AUTHORITY='" + taxgroupcode + "';" +
-                        //    "select RTRIM(cast(a.detail_line as char)), RTRIM(cast(a.loan_id as CHAR)), rtrim(b.borrower_name), RTRIM(cast(a.trans_type as char)), " +
-                        //    " case when SUBSTRING(c.VDESC,7,3)= 'ASB' then SUBSTRING(c.VDESC,1,5)+'-' + b.placeof_supply + '-' + b.branch_id " +
-                        //    " when SUBSTRING(c.VDESC,7,3)= 'ASN' then SUBSTRING(c.VDESC,1,5)+'-' + '00' end, " +
-                        //    " a.trans_desc, a.oldloan_accountid, a.trans_amt , a.gst_rate, ISNULL(a.igst_amt, 0), ISNULL(a.cgst_amt, 0), ISNULL(a.sgst_amt, 0), " +
-                        //    " RTRIM(b.sage_acctid) from LNDSDB.dbo.disbursement_details a left join LNDSDB.dbo.disbursement_master b on b.loanid = a.hdseq_no " +
-                        //    //" left join [ctldat].dbo.CSOPTFD c on CAST(a.trans_type as char)= RTRIM(c.value) and c.OPTFIELD = 'LNACCTMAPIN' " +
-                        //    " where a.amount <> 0 and a.loanid ='" + hdSeqNo + "' ";
-                        string Querystring1 = " Select LIABILITY from [" + SAGEDB + "].[dbo].TXAUTH where AUTHORITY='" + taxgroupcode + "' ; " +   // deriving tax liability account
-                                           " select a.id, a.loanid, '" + borrowerName + "' as borrowerName, " +
-                                           " case when RTRIM(a.sage_id)= '30502' then '30502-' + Cast(b.stateid as varchar) + '-' + right('0'+left(b.branchid,4),4) " +
-                                           " when RTRIM(a.sage_id)= '30912' then '30912-00'  when RTRIM(a.sage_id)= '30103' then '30103-07-9999' " +
-                                           " when RTRIM(a.sage_id)= '21401' then '21401-00'  when RTRIM(a.sage_id)= '21402' then '21402-00'  end, " +
-                                           " a.[type], a.oldloanid, a.amount , a.gst_rate, ISNULL(a.igst_amt, 0), ISNULL(a.cgst_amt, 0), ISNULL(a.sgst_amt, 0), " +
-                                           " '" + DisSageAccId + "' sage_acctid from " + THSERVERDETS + " a " +
-                                           " left join " + THSERVERMSTR + " b on b.loanid = a.loanid  where a.amount <> 0 and a.loanid = '" + hdSeqNo + "' "; // selecting detail line items for journal entry
-
-                        cmd = new System.Data.SqlClient.SqlCommand(Querystring1, conn);
-                        cmd.CommandTimeout = 180;
-                        cmd.CommandType = CommandType.Text;
-                        cmd.ExecuteNonQuery();
-                        using (System.Data.SqlClient.SqlDataAdapter glsds = new System.Data.SqlClient.SqlDataAdapter())
-                        {
-                            using (tblibr = new DataSet())
-                            {
-                                glsds.SelectCommand = cmd;
-                                glsds.Fill(tblibr);
-                                if (tblibr.Tables[0].Rows.Count > 0)
-                                {
-                                    taxliabilityaccount = tblibr.Tables[0].Rows[0][0].ToString();
-                                }
-                                else
-                                {
-                                    ojbLog.WriteLog("Error in tax liability account - aborting");
-                                }
-                            }
-                            dloanid = tblibr.Tables[1].Rows[0][1].ToString();
-                            sageloanacct = tblibr.Tables[1].Rows[0][11].ToString().Trim();
-                        }
-                        // creating header and detail line 
-                        if (taxType_entry == true)
-                        {
-                            //Entering header details
-                            header.SourceType = "LD";     // Header source type LD for loan disbursement
-                                                          //header.TaxBaseAmount1 = taxbase;
-                                                          // header.TaxGroup = taxgroupcode;
-                                                          // header.TaxItemClass1 = "5";
-                                                          // header.EntryType = "1";
-                            header.Description = sageloanacct;
-                            header.JournalDetails = lstDet;
-                            lstHeader.Add(header);
-
-                            // Entering Journal details for taxes 
-                            detail = new ent_GLDetail();
-                            detail.SourceType = "TI";   // Detail source type T1 for crediting Tax liability IGST account
-                            detail.Reference = hdSeqNo;
-                            // detail.TaxAuthority = "07IGN";
-                            detail.Description = sageloanacct.Trim();
-                            detail.AccountNumber = taxliabilityaccount.Trim();
-                            detail.Amount = igstamt;
-                            lstDet.Add(detail);
-
-                            detail = new ent_GLDetail();
-                            detail.SourceType = "LC";   // Detail source type LC for debiting loan account for gst
-                            detail.Reference = hdSeqNo.Trim();
-                            detail.AccountNumber = sageloanacct.Trim();
-                            detail.Description = "GST";
-                            detail.Amount = igstamt * -1;
-                            lstDet.Add(detail);
-                        }
-
-                        foreach (DataRow row in tblibr.Tables[1].Rows)
-                        {
-                            //'Creating entries for detail line which are not adjustment of old loan account
-                            // ' Checking & processing for charges which are subject to gst
-                            //row 3=sageid, row 6= amount , row 7 GST RATe
-                            if (row[3].ToString() != "0" && row[6].ToString() != "0" && row[7].ToString() != "0")
-                            {
-                                detail = new ent_GLDetail();
-                                detail.AccountNumber = row[3].ToString().Trim();
-                                detail.Amount = row[6];
-                                detail.Description = row[1].ToString().Trim() + "-" + row[2].ToString().Trim();
-                                detail.Reference = hdSeqNo + "-" + row[0].ToString().Trim();
-                                detail.SourceType = "X5";                                    //Taxable charge item -  5 means tax class 5 ie 18%
-                                                                                             //detail.TaxAuthority = "07IGN";
-                                lstDet.Add(detail);
-
-                                detail = new ent_GLDetail();
-                                detail.AccountNumber = row[11];
-                                detail.Amount = (Convert.ToDouble(row[6]) * -1);
-                                detail.Description = row[3].ToString().Trim() + "-" + row[4].ToString().Trim();
-                                detail.Reference = hdSeqNo + "-" + row[0].ToString().Trim();
-                                detail.SourceType = "LC";  // Detail source type LC for debiting loan account for gst
-                                // detail.TaxAuthority = "07IGN";
-                                lstDet.Add(detail);
-                            }
-                            //'Checking & processing for charges which are NOT subject to gst
-                            if (row[3].ToString() != "0" && row[6].ToString() != "0" && row[7].ToString() == "0")
-                            {
-                                detail = new ent_GLDetail();
-                                detail.AccountNumber = row[3].ToString().Trim();
-                                detail.Amount = row[6];
-                                detail.Description = row[1].ToString().Trim() + "-" + row[2].ToString().Trim();
-                                detail.Reference = hdSeqNo + "-" + row[0].ToString().Trim();
-                                detail.SourceType = "X1";                 //Non taxable charge  items
-                                //detail.TaxAuthority = "07IGN";
-                                lstDet.Add(detail);
-
-                                detail = new ent_GLDetail();
-                                detail.AccountNumber = row[11];
-                                detail.Amount = (Convert.ToDouble(row[6]) * -1);
-                                detail.Description = row[3].ToString().Trim() + "-" + row[4].ToString().Trim();
-                                detail.Reference = hdSeqNo + "-" + row[0].ToString().Trim();
-                                detail.SourceType = "LC";
-                                //detail.TaxAuthority = "07IGN";
-                                lstDet.Add(detail);
-                            }
-
-                            //'Checking & processing for old loan adjustment
-                            //'For crediting old loan account - credit amount
-                            if (row[6].ToString() != "0" && row[5].ToString() != "0")
-                            {
-                                ojbLog.WriteLog(row[0].ToString().Trim());
-                                ojbLog.WriteLog(oldacct[row[0].ToString().Trim()]);
-                                detail = new ent_GLDetail();
-                                detail.AccountNumber = oldacct[row[0].ToString().Trim()];
-                                detail.Amount = row[6];
-                                detail.Description = row[1].ToString().Trim() + "-" + row[2].ToString().Trim();
-                                detail.Reference = hdSeqNo + "-" + row[0].ToString().Trim();
-                                detail.SourceType = "OL";
-                                //detail.TaxAuthority = "07IGN";
-                                lstDet.Add(detail);
-
-                                detail = new ent_GLDetail();
-                                detail.AccountNumber = row[11].ToString().Trim();
-                                detail.Amount = (Convert.ToDouble(row[6]) * -1);
-                                detail.Description = oldacct[row[0].ToString().Trim()];
-                                detail.Reference = hdSeqNo + "-" + row[0].ToString().Trim();
-                                detail.SourceType = "LO";
-                                // detail.TaxAuthority = "07IGN";
-                                lstDet.Add(detail);
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                ojbLog.WriteLog("GLBatchEntry Inseting. fail........." + ex.Message.ToString());
-            }
-            Jbatch.UpdateOperation = "Unspecified";
-            Jbatch.Description = dloanid + "-" + hdSeqNo;
-            Jbatch.JournalHeaders = lstHeader;
-            var payloadString = JsonConvert.SerializeObject(Jbatch);
-            ojbLog.WriteLog("GLBatchEntry Inseting ...Created Json...");
-            dynamic newCustomer = POSTData(Jbatch, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/GL/GLJournalBatches");
-            dynamic deserialized = JsonConvert.DeserializeObject(newCustomer.ToString());
-            try
-            {
-                var rESPONSE = deserialized["JournalHeaders"];
-                dynamic des = JsonConvert.DeserializeObject(rESPONSE.ToString());
-                str_batchno = des[0].BatchNumber.ToString();
-                string EntryNumber = des[0].EntryNumber.ToString();
-                ojbLog.WriteLog("GL Entry creation successful....GLBatchNumbr=" + str_batchno);
-                rntGLBatchEntry = true;
-                // ojbLog.WriteLog("GLBatchEntry Updating......");
-                //UpdateCollMaster(str_batchno, hdSeqNo);
-                //ojbLog.WriteLog("GLBatchEntry No updated in disbursement header...GLBatchNumbr=" + str_batchno);
-                // else
-                // ojbLog.WriteLog("GLBatchEntry No updating failed in disbursement header...GLBatchNumbr=" + str_batchno);
-            }
-            catch (Exception Err)
-            {
-                rntGLBatchEntry = false;
-                MessageBox.Show(deserialized);
-                ojbLog.WriteLog("GLBatchEntry function failed......" + Err.Message.ToString());
-            }
-
-            return rntGLBatchEntry;
-        }
-        public void Coll_notUse()
-        {
-            #region      old--------------------------------
-
-            // dynamic GL = new ExpandoObject();
-            // var obj = (IDictionary<string, object>)GL;
-            // ent_GLHeader header_c;
-            // ent_GLDetail detail_c;
-            // List<ent_GLDetail> lstDet_c;
-            // string SageACC_Dis_List = "";
-            // ent_GLJBtch Jbatch_c = new ent_GLJBtch();
-            // lstHeader_c = new List<ent_GLHeader>();
-            // System.Data.SqlClient.SqlDataAdapter SDA_detline;
-
-            //// ent_GLHeader header;
-            // //ent_GLJBtch Jbatch = new ent_GLJBtch();
-            ////List<ent_GLHeader> lstHeader;
-            // //List<ent_GLDetail> lstDet;
-
-            // DataTable tb_DetLN;
-            // DataTable tbGRD;
-            // DataTable dtnew = new DataTable();
-            // System.Data.SqlClient.SqlConnection conn;
-            // System.Data.SqlClient.SqlCommand cmd;
-            // conn = new System.Data.SqlClient.SqlConnection(connectionstring);
-            // conn.Open();
-            // string Querystring = "Select sageacct_branchcash,branch_id,count(branch_id) LineCount from [CTLOAN].dbo.DCRcoll where Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "' and sageacct_branchcash IS NOT NULL and Received_Amt <>0 and GLBatch_No is null group by sageacct_branchcash,branch_id";
-            //// string Querystring = "Select sageacct_branchcash, sum(Received_Amt) Total_Received_Amt,loanid,count(loanid) LineCount from [CTLOAN].dbo.DCRcoll where sageacct_branchcash IS NOT NULL and Received_Amt IS NOT NULL and Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "'  group by sageacct_branchcash,loanid";
-            // cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
-            // cmd.CommandTimeout = 180;
-            // cmd.CommandType = CommandType.Text;
-            // cmd.ExecuteNonQuery();
-            // using (System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter())
-            // {
-            //     var objerrList = (IDictionary<string, object>)person;
-            //     cmd.Connection = conn;
-            //     sda.SelectCommand = cmd;
-            //     using (tbGRD = new DataTable())
-            //     {
-            //         sda.Fill(tbGRD);
-            //         if (tbGRD.Rows.Count > 0)
-            //         {
-            //             //header_c = new ent_GLHeader();
-            //             //lstDet_c = new List<ent_GLDetail>();
-            //             //Jbatch_c.UpdateOperation = "Unspecified";
-            //             //Jbatch_c.Description = DateTime.Now + "-Batch-Description";
-            //             ////Entering header details
-            //             //header_c.SourceType = "JE";  
-            //             //header_c.Description = DateTime.Now + "-Description";
-            //             //header_c.JournalDetails = lstDet_c;
-            //             //lstHeader_c.Add(header_c);
-
-
-            //             Jbatch_c.UpdateOperation = "Unspecified";
-            //             Jbatch_c.Description = DateTime.Now + "-Batch-Description";
-
-            //             lblTotalrowcount.Text = tbGRD.Rows.Count.ToString();
-            //             lblslotcount.Text = slotSize.ToString();
-
-            //             dataGridView1.DataSource = tbGRD;
-            //             //dataGridView1.AutoGenerateColumns = false;
-            //             tbGRD.Columns.Add("LoanId", typeof(System.String));
-            //             tbGRD.Columns.Add("Valid_SageId", typeof(System.String));
-            //             tbGRD.Columns.Add("Valid_LoanId", typeof(System.String));
-
-            //             int i = 0;
-            //             foreach (DataRow rw in tbGRD.Rows)
-            //             {
-            //                 // TotalAmt_c= rw["Total_Received_Amt"].ToString();
-            //                 // string loanid_c = rw["loanid"].ToString();
-            //                 string SageACid_c = rw["sageacct_branchcash"].ToString();                            
-            //                 Boolean sage_sageAccid = CheckExistSage(SageACid_c);
-            //                 ojbLog.WriteLog("Cash collection for branch - "+ sage_sageAccid);
-            //                 Boolean Debit_Entry = false;
-            //                 decimal amt_c;
-            //                 lstDet_c = new List<ent_GLDetail>();
-            //                 if (sage_sageAccid == true)
-            //                 {
-            //                     DataGridViewCellStyle style = new DataGridViewCellStyle();
-            //                     style.ForeColor = Color.Green;
-            //                     rw["Valid_SageId"] = "Passed";
-            //                     dataGridView1.Rows[i].Cells[2].Style = style;
-            //                     string Querystring1 = "Select * from [CTLOAN].dbo.DCRcoll where Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "' and sageacct_branchcash='"+ SageACid_c + "' and Received_Amt <>0 and GLBatch_No is null ";
-            //                     cmd = new System.Data.SqlClient.SqlCommand(Querystring1, conn);
-            //                     cmd.CommandTimeout = 180;
-            //                     cmd.CommandType = CommandType.Text;
-            //                     cmd.ExecuteNonQuery();
-            //                      SDA_detline = new System.Data.SqlClient.SqlDataAdapter();
-            //                      tb_DetLN = new DataTable();
-            //                     cmd.Connection = conn;
-            //                     SDA_detline.SelectCommand = cmd;
-            //                     SDA_detline.Fill(tb_DetLN);
-            //                     dtnew.Merge(tb_DetLN);
-
-            //                     if (tb_DetLN.Rows.Count > 0)
-            //                     {
-            //                         header_c = new ent_GLHeader();
-
-            //                         ///DataGridView dataGridView3 = panel1.Controls.OfType<DataGridView>() as DataGridView;
-            //                         TotalAmt_c = 0;
-            //                         //dataGridView2.DataSource = tb_DetLN;
-            //                         int delCount = 0;
-            //                         foreach (DataRow lrw in tb_DetLN.Rows)
-            //                         {
-            //                             amt_c = 0;
-            //                             string loanid_cl = lrw["loanid"].ToString();
-            //                             rw["LoanId"] = loanid_cl;
-            //                             ojbLog.WriteLog("Cash collection for loan id-" + "00"+loanid_cl) ;
-            //                             Boolean mstr_loanid = CheckExist_MSTR_SG("00" + loanid_cl);
-            //                             if (mstr_loanid == true)
-            //                             {
-            //                                 if (delCount == 0)
-            //                                 {                                               
-            //                                     //Entering header details
-            //                                     header_c.SourceType = "JE";
-            //                                     header_c.Description = DateTime.Now + "-Description" + rw["branch_id"].ToString();
-            //                                     header_c.JournalDetails = lstDet_c;
-            //                                     lstHeader_c.Add(header_c);
-            //                                 }
-            //                                 delCount++;
-            //                                 rw["Valid_LoanId"] = "Passed";                                            
-            //                                 style.ForeColor = Color.Green;
-            //                                 dataGridView1.Rows[i].Cells[3].Style = style;                                            
-            //                                 ojbLog.WriteLog("json created for loan account -"+ sage_accid_c);
-            //                                 amt_c = Convert.ToDecimal( lrw["Received_Amt"].ToString());
-            //                                 detail_c = new ent_GLDetail();
-            //                                 detail_c.SourceType = "JE";   // Detail source type T1 for crediting Tax liability IGST account
-            //                                 detail_c.Reference = "Reference";
-            //                                 // detail.TaxAuthority = "07IGN";
-            //                                 detail_c.Description = "Description";
-            //                                 detail_c.AccountNumber = sage_accid_c;
-            //                                 detail_c.Amount = amt_c*-1;
-            //                                 TotalAmt_c = TotalAmt_c + amt_c;
-            //                                 lstDet_c.Add(detail_c);
-            //                                 Debit_Entry = true;
-            //                             }
-            //                             else
-            //                             {
-            //                                 ojbLog.WriteLog("loan account does not exist in loan master or in sage");
-            //                                 rw["Valid_LoanId"] = "Failed";                                            
-            //                                 style.ForeColor = Color.Red;
-            //                                 dataGridView1.Rows[i].Cells[3].Style = style;
-            //                             }
-            //                         }                                   
-            //                     }
-            //                     else
-            //                     {
-            //                         ojbLog.WriteLog("Loan account does not exist..");
-            //                     }
-            //                     }
-            //                 if(Debit_Entry==true)
-            //                 {
-            //                     string ss = "'00" + SageACid_c + "'";
-            //                     SageACC_Dis_List = ss + "," + SageACC_Dis_List;
-            //                     detail_c = new ent_GLDetail();
-            //                     detail_c.SourceType = "JE";   // Detail source type T1 for crediting Tax liability IGST account
-            //                     detail_c.Reference = "Reference";
-            //                     // detail.TaxAuthority = "07IGN";
-            //                     detail_c.Description = "Description";
-            //                     detail_c.AccountNumber = SageACid_c;
-            //                     detail_c.Amount = TotalAmt_c;
-            //                     lstDet_c.Add(detail_c);
-            //                 }
-
-            //                 else
-            //                 {
-            //                     rw["Valid_SageId"] = "Failed";
-            //                     DataGridViewCellStyle style = new DataGridViewCellStyle();
-            //                     style.ForeColor = Color.Red;
-            //                     dataGridView1.Rows[i].Cells[2].Style = style;
-            //                 }
-            //                 dataGridView2.DataSource = dtnew;
-            //                 i++;
-            //                 //GLBatchEntry_c(SageACid_c);
-            //                 Jbatch_c.JournalHeaders = lstHeader_c;
-            //             }
-
-
-            //             //dataGridView1.DataSource = tbGRD;
-            //             //dataGridView1.AutoGenerateColumns = false;
-            //             var payloadString = JsonConvert.SerializeObject(Jbatch_c);
-            //             dynamic newCustomer = POSTData(Jbatch_c, "http://localhost/Sage300WebApi/v1.0/-/" + SAGEDB + "/GL/GLJournalBatches");
-            //             if (newCustomer == "ERROR" || newCustomer == "conflic")
-            //             {
-            //             }
-            //            else 
-            //             {
-            //                     dynamic deserialized = JsonConvert.DeserializeObject(newCustomer.ToString());
-            //                     try
-            //                     {
-            //                         var rESPONSE = deserialized["JournalHeaders"];
-            //                         dynamic des = JsonConvert.DeserializeObject(rESPONSE.ToString());
-            //                         str_batchno = des[0].BatchNumber.ToString();
-            //                         string EntryNumber = des[0].EntryNumber.ToString();
-            //                         ojbLog.WriteLog("GL Entry creation successful....GLBatchNumbr=" + str_batchno);
-
-            //                        ojbLog.WriteLog("GLBatchEntry Updating......");
-            //                        UpdateCollMaster(str_batchno, SageACC_Dis_List);
-            //                     MessageBox.Show("GL Entry creation successful....GLBatchNumbr = " + str_batchno);
-            //                     ojbLog.WriteLog("GLBatchEntry No updated in disbursement header...GLBatchNumbr=" + str_batchno);
-            //                         // else
-            //                         // ojbLog.WriteLog("GLBatchEntry No updating failed in disbursement header...GLBatchNumbr=" + str_batchno);
-            //                     }
-            //                     catch (Exception Err)
-            //                     {
-            //                         MessageBox.Show(deserialized);
-            //                         ojbLog.WriteLog("GLBatchEntry function failed......" + Err.Message.ToString());
-            //                     }
-            //                 }
-            //         }
-            //         else { MessageBox.Show("Data not found!"); }
-            //     }
-            // }
-            #endregion
-
-            #region
-            /*
-            string SageACid_c ="";
-            dynamic GL = new ExpandoObject();
-            var obj = (IDictionary<string, object>)GL;
-            ent_GLHeader header_c;
-            ent_GLDetail detail_c;
-            List<ent_GLDetail> lstDet_c;
-             SageACC_Dis_List = "";
-             Jbatch_c = new ent_GLJBtch();
-            lstHeader_c = new List<ent_GLHeader>();
-            System.Data.SqlClient.SqlDataAdapter SDA_detline;
-
-            DataTable tb_DetLN;
-            DataTable tbGRD;
-            DataTable dtnew = new DataTable();
-            System.Data.SqlClient.SqlConnection conn;
-            System.Data.SqlClient.SqlCommand cmd;
-            conn = new System.Data.SqlClient.SqlConnection(connectionstring);
-            conn.Open();
-          //  string Querystring = "Select branch_id,count(branch_id) LineCount  from " + THSERVERCOLL + " where  branch_id='156' and Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "' and sageacct_branchcash IS NOT NULL and Received_Amt <>0   group by branch_id ";//and GLBatch_No is null 
-            string Querystring = "Select branch_id,count(branch_id) LineCount  from "+THSERVERCOLL+" where Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "' and sageacct_branchcash IS NOT NULL and Received_Amt <>0 and GLBatch_No is null  group by branch_id";// 
-            // string Querystring = "Select sageacct_branchcash, sum(Received_Amt) Total_Received_Amt,loanid,count(loanid) LineCount from [CTLOAN].dbo.DCRcoll where sageacct_branchcash IS NOT NULL and Received_Amt IS NOT NULL and Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "'  group by sageacct_branchcash,loanid";
-            cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
-            cmd.CommandTimeout = 180;
-            cmd.CommandType = CommandType.Text;
-            cmd.ExecuteNonQuery();
-            using (System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter())
-            {
-                var objerrList = (IDictionary<string, object>)person;
-                cmd.Connection = conn;
-                sda.SelectCommand = cmd;
-                using (tbGRD = new DataTable())
-                {
-                    sda.Fill(tbGRD);
-                    if (tbGRD.Rows.Count > 0)
-                    {
-                        Jbatch_c.UpdateOperation = "Unspecified";
-                        Jbatch_c.Description = DateTime.Now + "-Batch-Description-";
-
-                        lblTotalrowcount.Text = tbGRD.Rows.Count.ToString();
-                        lblslotcount.Text = slotSize.ToString();
-
-                        dataGridView1.DataSource = tbGRD;
-                        //dataGridView1.AutoGenerateColumns = false;
-                        tbGRD.Columns.Add("SageAcctId", typeof(System.String));
-                        tbGRD.Columns.Add("Valid_LoanId", typeof(System.String));
-                        tbGRD.Columns.Add("Valid_SageId", typeof(System.String)); 
-                        int i = 0;
-                        
-                        foreach (DataRow rw in tbGRD.Rows)
-                        {
-                            string BranchId_c = rw["branch_id"].ToString();
-                            ojbLog.WriteLog("In Process Branch_ID="+ BranchId_c);
-                            string Querystring1 = "Select * from "+THSERVERCOLL+" where Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "' and branch_id='" + BranchId_c + "' and Received_Amt <>0  and sageacct_branchcash IS NOT NULL and GLBatch_No is null ";  //
-                                cmd = new System.Data.SqlClient.SqlCommand(Querystring1, conn);
-                                cmd.CommandTimeout = 180;
-                                cmd.CommandType = CommandType.Text;
-                                cmd.ExecuteNonQuery();
-                                SDA_detline = new System.Data.SqlClient.SqlDataAdapter();
-                                tb_DetLN = new DataTable();
-                                cmd.Connection = conn;
-                                SDA_detline.SelectCommand = cmd;
-                                SDA_detline.Fill(tb_DetLN);
-                                dtnew.Merge(tb_DetLN);
-                            Boolean Debit_Entry = false;
-                            if (tb_DetLN.Rows.Count > 0)
-                            {
-                                header_c = new ent_GLHeader();
-                                TotalAmt_c = 0;
-                                int delCount = 0;
-                                string loanid_cl = "";
-                                lstDet_c = new List<ent_GLDetail>();
-                                foreach (DataRow lrw in tb_DetLN.Rows)
-                                {
-                                    loanid_cl = lrw["loanid"].ToString();
-                                    string lnid = "00" + loanid_cl;
-                                    Boolean mstr_loanid = CheckExist_MSTR_SG(lnid);
-                                    ojbLog.WriteLog("Cash collection for branch/Loanid -"+ BranchId_c);
-                                    decimal amt_c;
-                                    amt_c = 0;
-                                    if (mstr_loanid == true)
-                                    {
-                                        ojbLog.WriteLog("Exist in master loan id-" + "00" + loanid_cl);
-                                        DataGridViewCellStyle style = new DataGridViewCellStyle();
-                                        style.ForeColor = Color.Green;
-                                        rw["Valid_LoanId"] = "Passed";
-                                        dataGridView1.Rows[i].Cells[3].Style = style;
-                                        
-                                        SageACid_c = lrw["sageacct_branchcash"].ToString().Trim();
-                                        Boolean sage_sageAccid = CheckExistSage(SageACid_c);
-                                        rw["SageAcctId"] = SageACid_c;
-
-                                        ojbLog.WriteLog("validating sage_sageAccid id-" + sage_sageAccid);
-                                        if (sage_sageAccid == true)
-                                        {
-                                            ojbLog.WriteLog("validated sage_sageAccid id-"  + sage_sageAccid);
-                                            if (delCount == 0)
-                                            {
-                                                //Entering header details
-                                                header_c.SourceType = "JE";
-                                                header_c.Description = DateTime.Now + "-Description" + rw["branch_id"].ToString();
-                                                header_c.JournalDetails = lstDet_c;
-                                                lstHeader_c.Add(header_c);
-                                            }
-                                            delCount++;
-                                            rw["Valid_SageId"] = "Passed";
-                                            style.ForeColor = Color.Green;
-                                            dataGridView1.Rows[i].Cells[4].Style = style;
-                                            ojbLog.WriteLog("json created for loan account -" + sage_accid_c);
-                                            amt_c = Convert.ToDecimal(lrw["Received_Amt"].ToString());
-                                            detail_c = new ent_GLDetail();
-                                            detail_c.SourceType = "JE";   // Detail source type T1 for crediting Tax liability IGST account
-                                            detail_c.Reference = "Reference";
-                                            // detail.TaxAuthority = "07IGN";
-                                            detail_c.Description = "Description";
-                                            detail_c.AccountNumber = sage_accid_c.Trim();
-                                            detail_c.Amount = amt_c * -1;
-                                            TotalAmt_c = TotalAmt_c + amt_c;
-                                            lstDet_c.Add(detail_c);
-                                            Debit_Entry = true;
-                                        }
-                                        else
-                                        {
-                                            ojbLog.WriteLog("Sage  account does not exist in loan master or in sage" + sage_sageAccid);
-                                            rw["Valid_SageId"] = "Failed";
-                                            style.ForeColor = Color.Red;
-                                            dataGridView1.Rows[i].Cells[4].Style = style;
-                                        }
-                                    }
-                                    else                                        
-                                {
-                                        ojbLog.WriteLog("Loanid does not exist in loan master or sage " + loanid_cl);
-                                        DataGridViewCellStyle style = new DataGridViewCellStyle();
-                                        rw["Valid_LoanId"] = "Failed";
-                                        style.ForeColor = Color.Red;
-                                        dataGridView1.Rows[i].Cells[3].Style = style;
-                                    }
-                                }
-                                if (Debit_Entry == true)
-                                {
-                                    string ss = "'" + SageACid_c + "'";
-                                    SageACC_Dis_List = ss + "," + SageACC_Dis_List;
-                                    detail_c = new ent_GLDetail();
-                                    detail_c.SourceType = "JE";   // Detail source type T1 for crediting Tax liability IGST account
-                                    detail_c.Reference = "Reference";
-                                    // detail.TaxAuthority = "07IGN";
-                                    detail_c.Description = "Description";
-                                    detail_c.AccountNumber = SageACid_c.Trim();
-                                    detail_c.Amount = TotalAmt_c;
-                                    lstDet_c.Add(detail_c);
-                                }
-                            }
-                            dataGridView2.DataSource = dtnew;
-                            i++;
-                            //GLBatchEntry_c(SageACid_c);
-                            Jbatch_c.JournalHeaders = lstHeader_c;                            
-                        }
-                    }
-                    else { MessageBox.Show("Data not found!"); }
-                }
-            }
-            */
-            #endregion
-
-            #region  New Code -----slot wise--------
-
-            /* string SageACid_c = "";
-             dynamic GL = new ExpandoObject();
-             var obj = (IDictionary<string, object>)GL;
-             ent_GLHeader header_c;
-             ent_GLDetail detail_c;
-             List<ent_GLDetail> lstDet_c;
-
-             JList = new List<ent_GLJBtch>();
-             update_JList = new List<string>();
-
-             DataTable tbGRD;
-             DataTable dtnew = new DataTable();
-             System.Data.SqlClient.SqlConnection conn;
-             System.Data.SqlClient.SqlCommand cmd;
-             conn = new System.Data.SqlClient.SqlConnection(connectionstring);
-             conn.Open();
-              string Querystring = " Select ROW_NUMBER() over(ORDER BY l.branch_id)  AS S_No, l.branch_id, l.loan_id,sage_acctid,d.sageacct_branchcash,d.received_Amt,d.Received_Date from [CTLOAN].dbo.LNMSTR l  " +
-                     " inner join "+SAGEDB+".dbo.GLAMF s on l.sage_acctid = s.ACCTFMTTD " +
-                     " inner join " + THSERVERCOLL + " d on d.loanid=right('0000000'+left(l.loan_id,8),8) " +
-                     " where   d.Received_Amt <>0  and d.sageacct_branchcash IS NOT NULL and d.GLBatch_No is null and Convert(date,d.Received_Date,100)='" + dateTimePicker3.Text + "' ";
-             // string Querystring = "Select branch_id,count(branch_id) LineCount  from " + THSERVERCOLL + " where Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "' and sageacct_branchcash IS NOT NULL and Received_Amt <>0 and GLBatch_No is null  group by branch_id";// 
-             // string Querystring = "Select sageacct_branchcash, sum(Received_Amt) Total_Received_Amt,loanid,count(loanid) LineCount from [CTLOAN].dbo.DCRcoll where sageacct_branchcash IS NOT NULL and Received_Amt IS NOT NULL and Convert(date,Received_Date,100)='" + dateTimePicker3.Text + "'  group by sageacct_branchcash,loanid";
-             //string Querystring = " Select l.branch_id, l.loan_id,sage_acctid from [CTLOAN].dbo.LNMSTR l  "+
-             //        " inner join CTLDAT.dbo.GLAMF s on l.sage_acctid = s.ACCTFMTTD  where l.loan_id  in "+
-             //        " (Select right('0000000' + left(loanid, 8), 8) loanid from[CTLOAN].dbo.DCRcoll where Convert(date, Received_Date, 100) = '" + dateTimePicker3.Text + "' " +
-             //        " and Received_Amt<>0  and sageacct_branchcash IS NOT NULL and GLBatch_No is null)";
-             cmd = new System.Data.SqlClient.SqlCommand(Querystring, conn);
-             cmd.CommandTimeout = 180;
-             cmd.CommandType = CommandType.Text;
-             cmd.ExecuteNonQuery();
-             using (System.Data.SqlClient.SqlDataAdapter sda = new System.Data.SqlClient.SqlDataAdapter())
-             {
-                 var objerrList = (IDictionary<string, object>)person;
-                 cmd.Connection = conn;
-                 sda.SelectCommand = cmd;
-                 using (tbGRD = new DataTable())
-                 {
-                     sda.Fill(tbGRD);
-                     if (tbGRD.Rows.Count > 0)
-                     {
-
-
-                         //lblTotalrowcount.Text = tbGRD.Rows.Count.ToString();
-                         //lblslotcount.Text = slotSize.ToString();
-
-                         dataGridView1.DataSource = tbGRD;
-                         //dataGridView1.AutoGenerateColumns = false;
-                         tbGRD.Columns.Add("SageAcctId", typeof(System.String));
-                         tbGRD.Columns.Add("Valid_SageId", typeof(System.String));
-                         dataGridView1.EnableHeadersVisualStyles = false;
-                         dataGridView1.ColumnHeadersDefaultCellStyle.BackColor = Color.Gray;
-                         dataGridView1.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-                         // dgw_deposit.ColumnHeadersHeight = 50;
-                         dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.EnableResizing;
-                         dataGridView1.ColumnHeadersHeight = 30;
-                         dataGridView1.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-                         dataGridView1.ColumnHeadersDefaultCellStyle.Font = new Font("Tahoma", 9.75F, FontStyle.Bold);
-
-                         int i = 0;
-                         int slotlength = Convert.ToInt32(txtslotlength.Text);
-                         int slot_c = 0;
-                         if (tbGRD.Rows.Count > slotlength)
-                         {
-                             int mode_c = (tbGRD.Rows.Count) % slotlength;
-                             slot_c = (tbGRD.Rows.Count) / slotlength;
-                             if (mode_c > 0)
-                                 slot_c = slot_c + 1;
-                         }
-                         else slot_c = 1;
-
-                         int from12 = 1;
-                         int to12 = slotlength;
-                         DataView viewSlot = new DataView(tbGRD);
-
-                         for (int k = 0; k < slot_c; k++)
-                         {
-                             Jbatch_c = new ent_GLJBtch();
-                             lstHeader_c = new List<ent_GLHeader>();
-                              lblCollTotal.Text = tbGRD.Rows.Count.ToString();
-                             Jbatch_c.UpdateOperation = "Unspecified";
-                             Jbatch_c.Description = DateTime.Now + "-Batch-Description-";
-                             SageACC_Dis_List = "";
-                             ojbLog.WriteLog("Start Slot " + (k+1));
-                             //.Any()
-                             ojbLog.WriteLog("S_NO >=#'" + from12 + "' And  S_NO<= #'" + to12 + "'   " );
-                             DataTable tb_slot = tbGRD.Select("S_NO >="+ from12 + " And  S_NO<= " + to12 + "").CopyToDataTable();
-                           // DataTable tb_slot = viewSlot.ToTable("S_NO >=#" + from + " And  S_NO<= #" + to + "");
-                             ojbLog.WriteLog("S_NO >=#'" + from12 + "' And  S_NO<= #'" + to12 + "'   "+ tb_slot.Rows.Count);
-                             if (tb_slot.Rows.Count>0)
-                             {
-                             DataView view1 = new DataView(tb_slot);
-                         DataTable tb_distinctValues = view1.ToTable(true, "branch_id");
-                             ojbLog.WriteLog("Slot row Count=="+tb_distinctValues.Rows.Count.ToString());
-
-                             //foreach (DataRow rw in tb_distinctValues.Rows)
-                         foreach (DataRow rw in tb_distinctValues.Rows)
-                         {
-                                 string BranchId_c = rw["branch_id"].ToString();
-                                 //string BranchId_c = rw["ABRKID"].ToString();
-                                 ojbLog.WriteLog("In Process Branch_ID=" + BranchId_c);
-                                 string fff = "branch_id='" + BranchId_c + "'";
-                                 DataRow[] rowsFilteredSorting = tb_slot.Select(fff);
-                                 Boolean Debit_Entry = false;
-                                 header_c = new ent_GLHeader();
-                                 TotalAmt_c = 0;
-                                 int delCount = 0;
-                                 string loanid_cl = "";
-                                 lstDet_c = new List<ent_GLDetail>();
-                                 decimal amt_c;
-                                 amt_c = 0;
-                                 foreach (DataRow VDrw in rowsFilteredSorting)
-                                 {
-                                     string branchid_c = VDrw["branch_id"].ToString();
-                                     string Vloanid_c = VDrw["loan_id"].ToString();
-                                     sage_accid_c = VDrw["sage_acctid"].ToString();
-
-                                     loanid_cl = VDrw["loan_id"].ToString();
-
-                                     // Boolean mstr_loanid = CheckExist_MSTR_SG(loanid_cl);
-                                     ojbLog.WriteLog("Cash collection for Loanid -" + loanid_cl);
-
-                                     SageACid_c = VDrw["sageacct_branchcash"].ToString().Trim();
-                                     Boolean sage_sageAccid = CheckExistSage(SageACid_c);
-                                         dataGridView1.Rows[i].Cells["SageAcctId"].Value = SageACid_c;
-
-                                     ojbLog.WriteLog("validating sage_sageAccid id-" + SageACid_c);
-                                     if (sage_sageAccid == true)
-                                     {
-                                         ojbLog.WriteLog("validated sage_sageAccid id-" + SageACid_c);
-                                         if (delCount == 0)
-                                         {
-                                             //Entering header details
-                                             header_c.SourceType = "JE";
-                                             header_c.Description = DateTime.Now + "-Description" + rw["branch_id"].ToString();
-                                             header_c.JournalDetails = lstDet_c;
-                                             lstHeader_c.Add(header_c);
-                                         }
-                                         delCount++;
-                                         success_c++;
-
-                                             dataGridView1.Rows[i].Cells["Valid_SageId"].Value = "Passed";
-                                         DataGridViewCellStyle style = new DataGridViewCellStyle();
-                                         style.ForeColor = Color.Green;
-                                         dataGridView1.Rows[i].Cells[8].Style = style;
-                                         ojbLog.WriteLog("json created for loan account -" + sage_accid_c);
-                                         amt_c = Convert.ToDecimal(VDrw["Received_Amt"].ToString());
-                                         detail_c = new ent_GLDetail();
-                                         detail_c.SourceType = "JE";   // Detail source type T1 for crediting Tax liability IGST account
-                                         detail_c.Reference = "Reference";
-                                         // detail.TaxAuthority = "07IGN";
-                                         detail_c.Description = "Description";
-                                         detail_c.AccountNumber = sage_accid_c.Trim();
-                                         detail_c.Amount = amt_c * -1;
-                                         TotalAmt_c = TotalAmt_c + amt_c;
-                                         lstDet_c.Add(detail_c);
-                                         Debit_Entry = true;
-                                         lblSuccess_cc.Text = Convert.ToString(success_c);
-                                     }
-                                     else
-                                     {
-
-                                         ojbLog.WriteLog("Sage  account does not exist in loan master or in sage" + sage_sageAccid);
-                                         dataGridView1.Rows[i].Cells["Valid_SageId"].Value = "Failed";
-                                          DataGridViewCellStyle style = new DataGridViewCellStyle();
-                                          style.ForeColor = Color.Red;
-                                         dataGridView1.Rows[i].Cells[8].Style = style;
-                                         fail_c++;
-                                         lblfail_c.Text = Convert.ToString(fail_c);
-                                     }
-                                     i++;
-                                 }
-                                 if (Debit_Entry == true)
-                                 {
-                                     string ss = "'" + SageACid_c + "'";
-                                     SageACC_Dis_List = ss + "," + SageACC_Dis_List;
-                                     detail_c = new ent_GLDetail();
-                                     detail_c.SourceType = "JE";   // Detail source type T1 for crediting Tax liability IGST account
-                                     detail_c.Reference = "Reference";
-                                     // detail.TaxAuthority = "07IGN";
-                                     detail_c.Description = "Description";
-                                     detail_c.AccountNumber = SageACid_c.Trim();
-                                     detail_c.Amount = TotalAmt_c;
-                                     lstDet_c.Add(detail_c);
-                                 }
-                                 //GLBatchEntry_c(SageACid_c);
-                                 Jbatch_c.JournalHeaders = lstHeader_c;                                
-                         }
-                             }
-                             JList.Add(Jbatch_c);
-                             update_JList.Add(SageACC_Dis_List.Remove(SageACC_Dis_List.Length - 1));
-                             from12 = from12 + slotlength;
-                             to12 = to12 + slotlength;
-                             ojbLog.WriteLog("End Slot " + (k + 1));
-                         }
-                     }
-                     else { MessageBox.Show("Data not found!"); }                    
-                 }
-             }
-             */
-            #endregion
-        }
-        #endregion
 
     }
 }

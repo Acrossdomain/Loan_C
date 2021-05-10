@@ -13,7 +13,7 @@ namespace Loan_C
         public object AccountNumber { get; set; }
         public object SourceType { get; set; }
         public object Amount { get; set; }
-        //public object OrigDescription { get; set; }
+        //public object DateCreated { get; set; }
         // public object TaxAuthority { get; set; }
     }
 }

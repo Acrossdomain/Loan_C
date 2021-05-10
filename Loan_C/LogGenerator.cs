@@ -9,15 +9,19 @@ namespace CTL_MSTR
 {
     public class LogGenerator
     {
-        public void WriteLog(string strLog)
+        public void WriteLog(string datefile,string strLog)
         {
             StreamWriter log;
             FileStream fileStream = null;
             DirectoryInfo logDirInfo = null;
             FileInfo logFileInfo;
-
+            //Today.ToString("yyyy-MM-dd h:mm tt")
             string logFilePath = @"Logs\\";
-            logFilePath = logFilePath + "Log- " + System.DateTime.Today.ToString("yyyy-MM-dd") + "." + "txt";
+            //string datefile = System.DateTime.Now.ToString();
+            //datefile = datefile.Replace(" ", "-");
+            //datefile = datefile.Replace(":", "");
+            //datefile = datefile.Replace("/","-");
+            logFilePath = logFilePath + "Log- " + datefile + "." + "txt";
             logFileInfo = new FileInfo(logFilePath);
             logDirInfo = new DirectoryInfo(logFileInfo.DirectoryName);
             if (!logDirInfo.Exists) logDirInfo.Create();
