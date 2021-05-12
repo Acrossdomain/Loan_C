@@ -1312,7 +1312,6 @@ namespace Loan_C
                 using (tbBank = new DataTable())
                 {
                     glsda.Fill(tbBank);
-
                     if (tbBank.Rows.Count > 0)
                     {
                         ojbLog.WriteLog(logfilename,"Loan Id countor bk entry=>" + tbBank.Rows.Count);
